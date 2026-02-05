@@ -1,0 +1,16 @@
+# Data (do not commit)
+data/raw/
+data/interim/
+data/processed/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Python caches / environments
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS files
+.DS_Store
