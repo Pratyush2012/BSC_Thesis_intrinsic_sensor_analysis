@@ -171,9 +171,3 @@ def load_runs(raw_root: str | Path, include_pose: bool = True) -> list[RunData]:
         except (FileNotFoundError, ValueError):
             continue
     return runs
-
-
-def list_run_ids(raw_root: str | Path, include_pose: bool = True) -> list[str]:
-    """Return run IDs for runs that are successfully loadable."""
-
-    return [run.run_id for run in load_runs(raw_root, include_pose=include_pose)]
