@@ -171,3 +171,29 @@ def load_runs(raw_root: str | Path, include_pose: bool = True) -> list[RunData]:
         except (FileNotFoundError, ValueError):
             continue
     return runs
+
+
+def save_labeled_run(run_data: RunData, output_root: str | Path) -> None:
+    """Save a RunData object with labeled sensor data to CSV files.
+
+    Mirroring the raw directory structure, creates:
+    - {output_root}/{run_data.run_id}/log_t0_acc_1.csv
+    - {output_root}/{run_data.run_id}/log_t0_gyro_1.csv
+    - {output_root}/{run_data.run_id}/log_t0_encoder_velocity.csv
+    - {output_root}/{run_data.run_id}/log_t0_pose.csv (if pose exists)
+
+    Args:
+        run_data: RunData object with labeled sensor DataFrames
+        output_root: Root directory where labeled data will be saved
+    """
+    output_root = Path(output_root)
+    run_output_dir = output_root / run_data.run_id
+    run_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save each sensor to CSV
+    run_data.acc.to_csv(run_output_dir / "log_t0_acc_1.csv", index=False)
+    run_data.gyro.to_csv(run_output_dir / "log_t0_gyro_1.csv", index=False)
+    run_data.odo.to_csv(run_output_dir / "log_t0_encoder_velocity.csv", index=False)
+    
+    if run_data.pose is not None:
+        run_data.pose.to_csv(run_output_dir / "log_t0_pose.csv", index=False)
