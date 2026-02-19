@@ -1,9 +1,14 @@
 """Label assignment utilities for sensor data."""
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, TYPE_CHECKING
+from pathlib import Path
 import json
 import pandas as pd
+
+
+if TYPE_CHECKING:
+    from src.io import RunData
 
 
 @dataclass
@@ -56,13 +61,13 @@ def assign_label(timestamp: float, label_configs: Dict[str, LabelConfig]) -> Opt
         label_configs: Dictionary of label configurations
         
     Returns:
-        Label name if timestamp falls in a range, None otherwise
+        Label name if timestamp falls in a range, NaN otherwise
     """
     for label_name, config in label_configs.items():
         for label_range in config.ranges:
             if label_range.start <= timestamp <= label_range.end:
                 return label_name
-    return None
+    return float('nan')  # Return NaN if no label matches
 
 
 def label_dataframe(df: pd.DataFrame, 
@@ -84,3 +89,112 @@ def label_dataframe(df: pd.DataFrame,
         lambda t: assign_label(t, label_configs)
     )
     return df_copy
+
+def find_label_config(run_dir: Path) -> Optional[Path]:
+    """
+    Find the label config for a given run directory.
+    
+    Checks in the run directory first, then in the parent test directory.
+    
+    Args:
+        run_dir: Path to run directory
+        
+    Returns:
+        Path to label config if found, None otherwise
+    """
+    run_dir = Path(run_dir)
+    
+    # Check for config in the run directory
+    run_config = run_dir / "labels_config.json"
+    if run_config.exists():
+        return run_config
+    
+    # Check for config in the parent test directory
+    test_config = run_dir.parent / "labels_config.json"
+    if test_config.exists():
+        return test_config
+    
+    return None
+
+
+def discover_labeled_runs(raw_root: Path) -> Dict[Path, Path]:
+    """
+    Discover all runs with their respective label configurations.
+    
+    Finds all log_* directories under raw_root and maps them to their
+    corresponding label configuration files.
+    
+    Args:
+        raw_root: Root directory containing raw data (e.g., data/raw/)
+        
+    Returns:
+        Dictionary mapping run directories to label config paths
+    """
+    raw_root = Path(raw_root)
+    runs_with_labels = {}
+    
+    # Find all test directories
+    test_dirs = [d for d in raw_root.iterdir() if d.is_dir()]
+    test_dirs.sort()
+    
+    # For each test directory, find runs with label configs
+    for test_dir in test_dirs:
+        run_dirs = [d for d in test_dir.glob("log_*") if d.is_dir()]
+        for run_dir in run_dirs:
+            label_config_path = find_label_config(run_dir)
+            if label_config_path:
+                runs_with_labels[run_dir] = label_config_path
+    
+    return runs_with_labels
+
+
+def label_run_sensors(run: 'RunData', label_configs: Dict[str, LabelConfig]) -> Dict[str, pd.DataFrame]:
+    """
+    Apply labels to all sensors in a run.
+    
+    Args:
+        run: RunData object with sensor DataFrames
+        label_configs: Dictionary of label configurations
+        
+    Returns:
+        Dictionary mapping sensor names to labeled DataFrames
+    """
+    labeled_sensors = {}
+    
+    for sensor_name, sensor_df in run.sensors().items():
+        labeled_sensors[sensor_name] = label_dataframe(sensor_df, label_configs, time_column='t')
+    
+    return labeled_sensors
+
+
+def validate_label_transitions(labeled_df: pd.DataFrame, max_transitions: int = 3) -> Dict:
+    """
+    Validate label transitions in a labeled DataFrame.
+    
+    Args:
+        labeled_df: DataFrame with 'label' column
+        max_transitions: Maximum number of transitions to show in output
+        
+    Returns:
+        Dictionary with transition info and sample rows
+    """
+    # Find label transitions
+    transitions = []
+    for i in range(1, len(labeled_df)):
+        if labeled_df['label'].iloc[i] != labeled_df['label'].iloc[i-1]:
+            transitions.append(i)
+    
+    transition_samples = []
+    for idx, transition_idx in enumerate(transitions[:max_transitions]):
+        start = max(0, transition_idx - 2)
+        end = min(len(labeled_df), transition_idx + 3)
+        sample_rows = labeled_df[['t', 'label']].iloc[start:end]
+        transition_samples.append({
+            'transition_num': idx + 1,
+            'row_idx': transition_idx,
+            'samples': sample_rows
+        })
+    
+    return {
+        'total_transitions': len(transitions),
+        'transition_samples': transition_samples    }
