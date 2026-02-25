@@ -5,6 +5,10 @@ from typing import List, Optional, Dict, TYPE_CHECKING
 from pathlib import Path
 import json
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.cm as cm
 
 
 if TYPE_CHECKING:
@@ -197,4 +201,196 @@ def validate_label_transitions(labeled_df: pd.DataFrame, max_transitions: int = 
     
     return {
         'total_transitions': len(transitions),
-        'transition_samples': transition_samples    }
+        'transition_samples': transition_samples
+    }
+
+
+def plot_labeled_sensors(
+    acc: pd.DataFrame,
+    gyro: pd.DataFrame,
+    odo: pd.DataFrame,
+    tcol: str = "t_rel",
+    show: bool = False,
+) -> plt.Figure:
+    """Plot per-sensor panels with color-coded labels for one run.
+    
+    Creates a 3x2 grid showing:
+    - Left column: sensor axes (acc xyz, gyro xyz, odo v1/v2)
+    - Right column: magnitudes (acc mag, gyro mag, odo speed)
+    
+    Label regions are highlighted with background colors.
+    Colors are automatically assigned based on the unique labels present in the data.
+    
+    Args:
+        acc: Labeled accelerometer DataFrame
+        gyro: Labeled gyroscope DataFrame  
+        odo: Labeled odometry DataFrame
+        tcol: Time column name (default: 't_rel')
+        show: Whether to display the plot immediately
+        
+    Returns:
+        matplotlib Figure object
+    """
+    fig, axes = plt.subplots(3, 2, figsize=(14, 10))
+    
+    # Find all unique labels across all sensors
+    all_labels = set()
+    for df in [acc, gyro, odo]:
+        if 'label' in df.columns:
+            unique_labels = df['label'].dropna().unique()
+            all_labels.update(unique_labels)
+    
+    # Dynamically assign colors to labels using matplotlib's tab10 colormap
+    # Convert to light pastel colors for background highlighting
+    if all_labels:
+        sorted_labels = sorted(all_labels)
+        n_labels = len(sorted_labels)
+        
+        # Use tab10 for up to 10 labels, then cycle through if more
+        cmap = cm.get_cmap('tab10')
+        label_colors = {}
+        for i, label in enumerate(sorted_labels):
+            rgba = cmap(i % 10)
+            # Convert to lighter pastel version (increase brightness)
+            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
+            label_colors[label] = light_color
+    else:
+        label_colors = {}
+    
+    # Helper function to add label backgrounds
+    def add_label_backgrounds(ax, df, tcol):
+        """Add colored background regions for each label."""
+        if 'label' not in df.columns:
+            return
+        
+        # Group consecutive rows with same label
+        df_with_idx = df.reset_index(drop=True)
+        current_label = None
+        start_idx = None
+        
+        for idx in range(len(df_with_idx)):
+            label = df_with_idx.loc[idx, 'label']
+            
+            # Convert NaN to None for comparison
+            if pd.isna(label):
+                label = None
+                
+            if label != current_label:
+                # End previous region
+                if current_label is not None and start_idx is not None:
+                    start_time = df_with_idx.loc[start_idx, tcol]
+                    end_time = df_with_idx.loc[idx - 1, tcol]
+                    color = label_colors.get(current_label, '#eeeeee')
+                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+                
+                # Start new region
+                current_label = label
+                start_idx = idx
+        
+        # Handle last region
+        if current_label is not None and start_idx is not None:
+            start_time = df_with_idx.loc[start_idx, tcol]
+            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
+            color = label_colors.get(current_label, '#eeeeee')
+            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+    
+    # Plot accelerometer axes
+    add_label_backgrounds(axes[0, 0], acc, tcol)
+    axes[0, 0].plot(acc[tcol], acc["ax"], label="ax", linewidth=0.8)
+    axes[0, 0].plot(acc[tcol], acc["ay"], label="ay", linewidth=0.8)
+    axes[0, 0].plot(acc[tcol], acc["az"], label="az", linewidth=0.8)
+    axes[0, 0].set_title("Accelerometer axes (labeled)")
+    axes[0, 0].set_ylabel("acc [g]")
+    axes[0, 0].grid(True, alpha=0.4)
+    axes[0, 0].legend()
+
+    # Plot accelerometer magnitude
+    add_label_backgrounds(axes[0, 1], acc, tcol)
+    acc_mag = np.sqrt(acc["ax"] ** 2 + acc["ay"] ** 2 + acc["az"] ** 2)
+    axes[0, 1].plot(acc[tcol], acc_mag, linewidth=0.8)
+    axes[0, 1].set_title("Accelerometer magnitude (labeled)")
+    axes[0, 1].set_ylabel("|a| [g]")
+    axes[0, 1].grid(True, alpha=0.4)
+
+    # Plot gyroscope axes
+    add_label_backgrounds(axes[1, 0], gyro, tcol)
+    axes[1, 0].plot(gyro[tcol], gyro["gx"], label="gx", linewidth=0.8)
+    axes[1, 0].plot(gyro[tcol], gyro["gy"], label="gy", linewidth=0.8)
+    axes[1, 0].plot(gyro[tcol], gyro["gz"], label="gz", linewidth=0.8)
+    axes[1, 0].set_title("Gyroscope axes (labeled)")
+    axes[1, 0].set_ylabel("gyro [deg/s]")
+    axes[1, 0].grid(True, alpha=0.4)
+    axes[1, 0].legend()
+
+    # Plot gyroscope magnitude
+    add_label_backgrounds(axes[1, 1], gyro, tcol)
+    gyro_mag = np.sqrt(gyro["gx"] ** 2 + gyro["gy"] ** 2 + gyro["gz"] ** 2)
+    axes[1, 1].plot(gyro[tcol], gyro_mag, linewidth=0.8)
+    axes[1, 1].set_title("Gyroscope magnitude (labeled)")
+    axes[1, 1].set_ylabel("|g| [deg/s]")
+    axes[1, 1].grid(True, alpha=0.4)
+
+    # Plot odometry channels
+    add_label_backgrounds(axes[2, 0], odo, tcol)
+    axes[2, 0].plot(odo[tcol], odo["v1"], label="v1", linewidth=0.8)
+    axes[2, 0].plot(odo[tcol], odo["v2"], label="v2", linewidth=0.8)
+    axes[2, 0].set_title("Odometry channels (labeled)")
+    axes[2, 0].set_xlabel("time [s]")
+    axes[2, 0].set_ylabel("velocity [m/s]")
+    axes[2, 0].grid(True, alpha=0.4)
+    axes[2, 0].legend()
+
+    # Plot odometry speed
+    add_label_backgrounds(axes[2, 1], odo, tcol)
+    speed = 0.5 * (odo["v1"] + odo["v2"])
+    axes[2, 1].plot(odo[tcol], speed, linewidth=0.8)
+    axes[2, 1].set_title("Odometry speed (labeled)")
+    axes[2, 1].set_xlabel("time [s]")
+    axes[2, 1].set_ylabel("speed [m/s]")
+    axes[2, 1].grid(True, alpha=0.4)
+
+    # Create legend for labels using the dynamically assigned colors
+    if all_labels:
+        legend_patches = [
+            mpatches.Patch(color=label_colors[label], label=label, alpha=0.3)
+            for label in sorted(all_labels)
+        ]
+        fig.legend(handles=legend_patches, loc='upper center', 
+                  ncol=min(len(legend_patches), 6), bbox_to_anchor=(0.5, 0.98),
+                  title='Activity Labels')
+    
+    fig.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for legend
+    
+    if show:
+        plt.show()
+    
+    return fig
+
+
+def save_labeled_plot(
+    fig: plt.Figure,
+    run_id: str,
+    output_root: Path,
+    filename: str = "labeled_sensors_plot.png",
+    dpi: int = 150
+) -> Path:
+    """Save a labeled sensor plot to disk.
+    
+    Args:
+        fig: matplotlib Figure to save
+        run_id: Run identifier (used as subdirectory name)
+        output_root: Root directory for outputs (e.g., reports/labeled/)
+        filename: Output filename (default: 'labeled_sensors_plot.png')
+        dpi: Resolution for saved figure (default: 150)
+        
+    Returns:
+        Path to the saved file
+    """
+    output_root = Path(output_root)
+    run_output_dir = output_root / run_id
+    run_output_dir.mkdir(parents=True, exist_ok=True)
+    
+    output_path = run_output_dir / filename
+    fig.savefig(output_path, dpi=dpi, bbox_inches='tight')
+    
+    return output_path
