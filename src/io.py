@@ -41,31 +41,53 @@ class RunData:
 
 
 def read_log(path: str | Path, cols: list[str], usecols: list[int] | None = None) -> pd.DataFrame:
-    """Parse one raw whitespace-separated log file.
+    """Parse one log file (TXT or CSV format).
+
+    Auto-detects file format:
+    - .txt files: whitespace-separated, no header
+    - .csv files: comma-separated, with header (preserves all columns)
 
     Notes:
-    - `%` prefixed rows are metadata/comments and are ignored.
+    - `%` prefixed rows are metadata/comments and are ignored (TXT only).
     - We sort and deduplicate by timestamp to enforce monotonic samples.
     - Empty parsed files raise early so callers can skip bad runs deterministically.
     """
 
     path = Path(path)
-    df = pd.read_csv(
-        path,
-        comment="%",
-        sep=r"\s+",
-        header=None,
-        names=cols,
-        usecols=usecols,
-        engine="python",
-    )
+    
+    # Auto-detect format based on file extension
+    if path.suffix.lower() == '.csv':
+        # CSV format with header - read all columns
+        df = pd.read_csv(path)
+        # Validate that required base columns exist
+        required_cols = cols if usecols is None else [cols[i] for i in usecols]
+        missing_cols = [c for c in required_cols if c not in df.columns]
+        if missing_cols:
+            raise ValueError(f"CSV file {path} missing required columns: {missing_cols}. Found: {list(df.columns)}")
+        # Keep all columns (including label, t_rel, etc.)
+    else:
+        # TXT format (whitespace-separated, no header)
+        df = pd.read_csv(
+            path,
+            comment="%",
+            sep=r"\s+",
+            header=None,
+            names=cols,
+            usecols=usecols,
+            engine="python",
+        )
+    
     if df.empty:
         raise ValueError(f"No data rows found in {path}")
 
     time_col = cols[0]
+    # For CSV files with labels, don't drop rows with NaN labels
+    # Only drop rows where the required sensor columns are NaN
+    required_cols = cols if usecols is None else [cols[i] for i in usecols]
+    
     # Keep the first sample for repeated timestamps to maintain deterministic behavior.
     df = (
-        df.dropna()
+        df.dropna(subset=required_cols)  # Only drop if required columns are NaN
         .sort_values(time_col)
         .drop_duplicates(time_col, keep="first")
         .reset_index(drop=True)
@@ -100,6 +122,9 @@ def _add_relative_time(df: pd.DataFrame, t0: float, tcol: str = "t") -> pd.DataF
 def load_run(run_dir: str | Path, include_pose: bool = True) -> RunData:
     """Load one run directory into `RunData`.
 
+    Supports both TXT (raw) and CSV (processed/labeled) formats.
+    For CSV files, preserves all columns (including label, t_rel if present).
+
     Required logs:
     - accelerometer
     - gyroscope
@@ -117,6 +142,18 @@ def load_run(run_dir: str | Path, include_pose: bool = True) -> RunData:
     gyro_path = run_dir / GYRO_FILE
     odo_path = run_dir / ODO_FILE
     pose_path = run_dir / POSE_FILE
+    
+    # Check for CSV versions (processed/labeled data)
+    acc_csv_path = run_dir / "log_t0_acc_1.csv"
+    gyro_csv_path = run_dir / "log_t0_gyro_1.csv"
+    odo_csv_path = run_dir / "log_t0_encoder_velocity.csv"
+    pose_csv_path = run_dir / "log_t0_pose.csv"
+    
+    # Prefer CSV if it exists, otherwise use TXT
+    acc_path = acc_csv_path if acc_csv_path.exists() else acc_path
+    gyro_path = gyro_csv_path if gyro_csv_path.exists() else gyro_path
+    odo_path = odo_csv_path if odo_csv_path.exists() else odo_path
+    pose_path = pose_csv_path if pose_csv_path.exists() else pose_path
 
     required = [acc_path, gyro_path, odo_path]
     missing_required = [str(p) for p in required if not p.exists()]
@@ -125,26 +162,33 @@ def load_run(run_dir: str | Path, include_pose: bool = True) -> RunData:
         raise FileNotFoundError(f"Missing required log files: {missing_str}")
 
     # Column names are the canonical schema used across the pipeline.
+    # For CSV files, read_log will preserve all columns; for TXT, only these columns.
     acc = read_log(acc_path, ["t", "ax", "ay", "az"])
     gyro = read_log(gyro_path, ["t", "gx", "gy", "gz"])
-    # Odo file has debug columns after v1/v2; we intentionally keep only 0/1/2.
-    odo = read_log(odo_path, ["t", "v1", "v2"], usecols=[0, 1, 2])
+    # Odo file has debug columns after v1/v2; for TXT we keep only 0/1/2, for CSV we keep all
+    if odo_path.suffix.lower() == '.csv':
+        odo = read_log(odo_path, ["t", "v1", "v2"])
+    else:
+        odo = read_log(odo_path, ["t", "v1", "v2"], usecols=[0, 1, 2])
 
     pose: pd.DataFrame | None = None
     if include_pose and pose_path.exists():
         pose = read_log(pose_path, ["t", "x", "y", "heading", "tilt"])
 
-    first_times = [acc["t"].iloc[0], gyro["t"].iloc[0], odo["t"].iloc[0]]
-    if pose is not None:
-        first_times.append(pose["t"].iloc[0])
-    t0 = float(min(first_times))
+    # Only compute t_rel if it doesn't already exist (TXT files)
+    # CSV files from labeled/resampled runs already have t_rel
+    if "t_rel" not in acc.columns:
+        first_times = [acc["t"].iloc[0], gyro["t"].iloc[0], odo["t"].iloc[0]]
+        if pose is not None:
+            first_times.append(pose["t"].iloc[0])
+        t0 = float(min(first_times))
 
-    # Align each sensor to a shared `t_rel` origin at earliest sensor start.
-    acc = _add_relative_time(acc, t0=t0, tcol="t")
-    gyro = _add_relative_time(gyro, t0=t0, tcol="t")
-    odo = _add_relative_time(odo, t0=t0, tcol="t")
-    if pose is not None:
-        pose = _add_relative_time(pose, t0=t0, tcol="t")
+        # Align each sensor to a shared `t_rel` origin at earliest sensor start.
+        acc = _add_relative_time(acc, t0=t0, tcol="t")
+        gyro = _add_relative_time(gyro, t0=t0, tcol="t")
+        odo = _add_relative_time(odo, t0=t0, tcol="t")
+        if pose is not None:
+            pose = _add_relative_time(pose, t0=t0, tcol="t")
 
     return RunData(
         run_id=run_dir.name,
