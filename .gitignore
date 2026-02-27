@@ -1,8 +1,10 @@
 # Data (do not commit)
+data/
 data/raw/
 data/interim/
 data/processed/
 data/labeled/
+data/resampled/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
