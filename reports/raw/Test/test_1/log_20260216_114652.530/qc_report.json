@@ -1,6 +1,6 @@
 {
   "run_id": "log_20260216_114652.530",
-  "source_run_dir": "/Users/pratyush/Desktop/DTU/Bachelor_thesis/BSC_Thesis_intrinsic_sensor_analysis/data/raw/test_1/log_20260216_114652.530",
+  "source_run_dir": "/Users/pratyush/Desktop/DTU/Bachelor_thesis/BSC_Thesis_intrinsic_sensor_analysis/data/raw/Test/test_1/log_20260216_114652.530",
   "qc_report": {
     "acc": {
       "n": 145708,
