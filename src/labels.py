@@ -367,6 +367,387 @@ def plot_labeled_sensors(
     return fig
 
 
+def plot_labeled_acc(
+    acc: pd.DataFrame,
+    tcol: str = "t_rel",
+    show: bool = False,
+) -> plt.Figure:
+    """Plot accelerometer data with individual axes and magnitude in a 2x2 grid.
+    
+    Creates a 2x2 grid showing:
+    - Top-left [0,0]: ax (X axis) vs time
+    - Top-right [0,1]: ay (Y axis) vs time
+    - Bottom-left [1,0]: az (Z axis) vs time
+    - Bottom-right [1,1]: Magnitude vs time
+    
+    Label regions are highlighted with background colors.
+    
+    Args:
+        acc: Labeled accelerometer DataFrame
+        tcol: Time column name (default: 't_rel')
+        show: Whether to display the plot immediately
+        
+    Returns:
+        matplotlib Figure object
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    # Find all unique labels
+    all_labels = set()
+    if 'label' in acc.columns:
+        unique_labels = acc['label'].dropna().unique()
+        all_labels.update(unique_labels)
+    
+    # Dynamically assign colors to labels
+    if all_labels:
+        sorted_labels = sorted(all_labels)
+        cmap = cm.get_cmap('tab10')
+        label_colors = {}
+        for i, label in enumerate(sorted_labels):
+            rgba = cmap(i % 10)
+            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
+            label_colors[label] = light_color
+    else:
+        label_colors = {}
+    
+    # Helper function to add label backgrounds
+    def add_label_backgrounds(ax, df, tcol):
+        """Add colored background regions for each label."""
+        if 'label' not in df.columns:
+            return
+        
+        df_with_idx = df.reset_index(drop=True)
+        current_label = None
+        start_idx = None
+        
+        for idx in range(len(df_with_idx)):
+            label = df_with_idx.loc[idx, 'label']
+            
+            if pd.isna(label):
+                label = None
+                
+            if label != current_label:
+                if current_label is not None and start_idx is not None:
+                    start_time = df_with_idx.loc[start_idx, tcol]
+                    end_time = df_with_idx.loc[idx - 1, tcol]
+                    color = label_colors.get(current_label, '#eeeeee')
+                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+                
+                current_label = label
+                start_idx = idx
+        
+        if current_label is not None and start_idx is not None:
+            start_time = df_with_idx.loc[start_idx, tcol]
+            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
+            color = label_colors.get(current_label, '#eeeeee')
+            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+    
+    # Top-left [0,0]: ax (X axis) vs time
+    add_label_backgrounds(axes[0, 0], acc, tcol)
+    axes[0, 0].plot(acc[tcol], acc["ax"], label="ax", linewidth=0.8, color='C0')
+    axes[0, 0].set_title("Accelerometer - X Axis (ax)")
+    axes[0, 0].set_ylabel("acc [g]")
+    axes[0, 0].set_xlabel("time [s]")
+    axes[0, 0].grid(True, alpha=0.4)
+    axes[0, 0].legend()
+    
+    # Top-right [0,1]: ay (Y axis) vs time
+    add_label_backgrounds(axes[0, 1], acc, tcol)
+    axes[0, 1].plot(acc[tcol], acc["ay"], label="ay", linewidth=0.8, color='C1')
+    axes[0, 1].set_title("Accelerometer - Y Axis (ay)")
+    axes[0, 1].set_ylabel("acc [g]")
+    axes[0, 1].set_xlabel("time [s]")
+    axes[0, 1].grid(True, alpha=0.4)
+    axes[0, 1].legend()
+
+    # Bottom-left [1,0]: az (Z axis) vs time
+    add_label_backgrounds(axes[1, 0], acc, tcol)
+    axes[1, 0].plot(acc[tcol], acc["az"], label="az", linewidth=0.8, color='C2')
+    axes[1, 0].set_title("Accelerometer - Z Axis (az)")
+    axes[1, 0].set_ylabel("acc [g]")
+    axes[1, 0].set_xlabel("time [s]")
+    axes[1, 0].grid(True, alpha=0.4)
+    axes[1, 0].legend()
+    
+    # Bottom-right [1,1]: Magnitude vs time
+    add_label_backgrounds(axes[1, 1], acc, tcol)
+    acc_mag = np.sqrt(acc["ax"] ** 2 + acc["ay"] ** 2 + acc["az"] ** 2)
+    axes[1, 1].plot(acc[tcol], acc_mag, linewidth=0.8, color='red')
+    axes[1, 1].set_title("Accelerometer - Magnitude")
+    axes[1, 1].set_ylabel("|a| [g]")
+    axes[1, 1].set_xlabel("time [s]")
+    axes[1, 1].grid(True, alpha=0.4)
+    
+    # Create legend for labels
+    if all_labels:
+        legend_patches = [
+            mpatches.Patch(color=label_colors[label], label=label, alpha=0.3)
+            for label in sorted(all_labels)
+        ]
+        fig.legend(handles=legend_patches, loc='upper center', 
+                  ncol=min(len(legend_patches), 6), bbox_to_anchor=(0.5, 0.98),
+                  title='Activity Labels')
+    
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    if show:
+        plt.show()
+    
+    return fig
+
+
+def plot_labeled_gyro(
+    gyro: pd.DataFrame,
+    tcol: str = "t_rel",
+    show: bool = False,
+) -> plt.Figure:
+    """Plot gyroscope data with individual axes and magnitude in a 2x2 grid.
+    
+    Creates a 2x2 grid showing:
+    - Top-left [0,0]: gx (X axis) vs time
+    - Top-right [0,1]: gy (Y axis) vs time
+    - Bottom-left [1,0]: gz (Z axis) vs time
+    - Bottom-right [1,1]: Magnitude vs time
+    
+    Label regions are highlighted with background colors.
+    
+    Args:
+        gyro: Labeled gyroscope DataFrame
+        tcol: Time column name (default: 't_rel')
+        show: Whether to display the plot immediately
+        
+    Returns:
+        matplotlib Figure object
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    # Find all unique labels
+    all_labels = set()
+    if 'label' in gyro.columns:
+        unique_labels = gyro['label'].dropna().unique()
+        all_labels.update(unique_labels)
+    
+    # Dynamically assign colors to labels
+    if all_labels:
+        sorted_labels = sorted(all_labels)
+        cmap = cm.get_cmap('tab10')
+        label_colors = {}
+        for i, label in enumerate(sorted_labels):
+            rgba = cmap(i % 10)
+            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
+            label_colors[label] = light_color
+    else:
+        label_colors = {}
+    
+    # Helper function to add label backgrounds
+    def add_label_backgrounds(ax, df, tcol):
+        """Add colored background regions for each label."""
+        if 'label' not in df.columns:
+            return
+        
+        df_with_idx = df.reset_index(drop=True)
+        current_label = None
+        start_idx = None
+        
+        for idx in range(len(df_with_idx)):
+            label = df_with_idx.loc[idx, 'label']
+            
+            if pd.isna(label):
+                label = None
+                
+            if label != current_label:
+                if current_label is not None and start_idx is not None:
+                    start_time = df_with_idx.loc[start_idx, tcol]
+                    end_time = df_with_idx.loc[idx - 1, tcol]
+                    color = label_colors.get(current_label, '#eeeeee')
+                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+                
+                current_label = label
+                start_idx = idx
+        
+        if current_label is not None and start_idx is not None:
+            start_time = df_with_idx.loc[start_idx, tcol]
+            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
+            color = label_colors.get(current_label, '#eeeeee')
+            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+    
+    # Top-left [0,0]: gx (X axis) vs time
+    add_label_backgrounds(axes[0, 0], gyro, tcol)
+    axes[0, 0].plot(gyro[tcol], gyro["gx"], label="gx", linewidth=0.8, color='C0')
+    axes[0, 0].set_title("Gyroscope - X Axis (gx)")
+    axes[0, 0].set_ylabel("gyro [deg/s]")
+    axes[0, 0].set_xlabel("time [s]")
+    axes[0, 0].grid(True, alpha=0.4)
+    axes[0, 0].legend()
+    
+    # Top-right [0,1]: gy (Y axis) vs time
+    add_label_backgrounds(axes[0, 1], gyro, tcol)
+    axes[0, 1].plot(gyro[tcol], gyro["gy"], label="gy", linewidth=0.8, color='C1')
+    axes[0, 1].set_title("Gyroscope - Y Axis (gy)")
+    axes[0, 1].set_ylabel("gyro [deg/s]")
+    axes[0, 1].set_xlabel("time [s]")
+    axes[0, 1].grid(True, alpha=0.4)
+    axes[0, 1].legend()
+
+    # Bottom-left [1,0]: gz (Z axis) vs time
+    add_label_backgrounds(axes[1, 0], gyro, tcol)
+    axes[1, 0].plot(gyro[tcol], gyro["gz"], label="gz", linewidth=0.8, color='C2')
+    axes[1, 0].set_title("Gyroscope - Z Axis (gz)")
+    axes[1, 0].set_ylabel("gyro [deg/s]")
+    axes[1, 0].set_xlabel("time [s]")
+    axes[1, 0].grid(True, alpha=0.4)
+    axes[1, 0].legend()
+    
+    # Bottom-right [1,1]: Magnitude vs time
+    add_label_backgrounds(axes[1, 1], gyro, tcol)
+    gyro_mag = np.sqrt(gyro["gx"] ** 2 + gyro["gy"] ** 2 + gyro["gz"] ** 2)
+    axes[1, 1].plot(gyro[tcol], gyro_mag, linewidth=0.8, color='red')
+    axes[1, 1].set_title("Gyroscope - Magnitude")
+    axes[1, 1].set_ylabel("|g| [deg/s]")
+    axes[1, 1].set_xlabel("time [s]")
+    axes[1, 1].grid(True, alpha=0.4)
+    
+    # Create legend for labels
+    if all_labels:
+        legend_patches = [
+            mpatches.Patch(color=label_colors[label], label=label, alpha=0.3)
+            for label in sorted(all_labels)
+        ]
+        fig.legend(handles=legend_patches, loc='upper center', 
+                  ncol=min(len(legend_patches), 6), bbox_to_anchor=(0.5, 0.98),
+                  title='Activity Labels')
+    
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    if show:
+        plt.show()
+    
+    return fig
+
+
+def plot_labeled_odo(
+    odo: pd.DataFrame,
+    tcol: str = "t_rel",
+    show: bool = False,
+) -> plt.Figure:
+    """Plot odometry data with individual channels and speed in a 2x2 grid.
+    
+    Creates a 2x2 grid showing:
+    - Top-left [0,0]: v1 (left wheel) vs time
+    - Top-right [0,1]: v2 (right wheel) vs time
+    - Bottom-left [1,0]: Empty
+    - Bottom-right [1,1]: Speed (average of v1 and v2) vs time
+    
+    Label regions are highlighted with background colors.
+    
+    Args:
+        odo: Labeled odometry DataFrame
+        tcol: Time column name (default: 't_rel')
+        show: Whether to display the plot immediately
+        
+    Returns:
+        matplotlib Figure object
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    # Find all unique labels
+    all_labels = set()
+    if 'label' in odo.columns:
+        unique_labels = odo['label'].dropna().unique()
+        all_labels.update(unique_labels)
+    
+    # Dynamically assign colors to labels
+    if all_labels:
+        sorted_labels = sorted(all_labels)
+        cmap = cm.get_cmap('tab10')
+        label_colors = {}
+        for i, label in enumerate(sorted_labels):
+            rgba = cmap(i % 10)
+            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
+            label_colors[label] = light_color
+    else:
+        label_colors = {}
+    
+    # Helper function to add label backgrounds
+    def add_label_backgrounds(ax, df, tcol):
+        """Add colored background regions for each label."""
+        if 'label' not in df.columns:
+            return
+        
+        df_with_idx = df.reset_index(drop=True)
+        current_label = None
+        start_idx = None
+        
+        for idx in range(len(df_with_idx)):
+            label = df_with_idx.loc[idx, 'label']
+            
+            if pd.isna(label):
+                label = None
+                
+            if label != current_label:
+                if current_label is not None and start_idx is not None:
+                    start_time = df_with_idx.loc[start_idx, tcol]
+                    end_time = df_with_idx.loc[idx - 1, tcol]
+                    color = label_colors.get(current_label, '#eeeeee')
+                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+                
+                current_label = label
+                start_idx = idx
+        
+        if current_label is not None and start_idx is not None:
+            start_time = df_with_idx.loc[start_idx, tcol]
+            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
+            color = label_colors.get(current_label, '#eeeeee')
+            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+    
+    # Top-left [0,0]: v1 (left wheel) vs time
+    add_label_backgrounds(axes[0, 0], odo, tcol)
+    axes[0, 0].plot(odo[tcol], odo["v1"], label="v1", linewidth=0.8, color='C0')
+    axes[0, 0].set_title("Odometry - Left Wheel (v1)")
+    axes[0, 0].set_ylabel("velocity [m/s]")
+    axes[0, 0].set_xlabel("time [s]")
+    axes[0, 0].grid(True, alpha=0.4)
+    axes[0, 0].legend()
+    
+    # Top-right [0,1]: v2 (right wheel) vs time
+    add_label_backgrounds(axes[0, 1], odo, tcol)
+    axes[0, 1].plot(odo[tcol], odo["v2"], label="v2", linewidth=0.8, color='C1')
+    axes[0, 1].set_title("Odometry - Right Wheel (v2)")
+    axes[0, 1].set_ylabel("velocity [m/s]")
+    axes[0, 1].set_xlabel("time [s]")
+    axes[0, 1].grid(True, alpha=0.4)
+    axes[0, 1].legend()
+    
+    # Bottom-left [1,0]: Empty (turn off axis)
+    axes[1, 0].axis('off')
+    
+    # Bottom-right [1,1]: Speed (average of v1 and v2) vs time
+    add_label_backgrounds(axes[1, 1], odo, tcol)
+    speed = 0.5 * (odo["v1"] + odo["v2"])
+    axes[1, 1].plot(odo[tcol], speed, linewidth=0.8, color='red')
+    axes[1, 1].set_title("Odometry - Speed (Average)")
+    axes[1, 1].set_ylabel("speed [m/s]")
+    axes[1, 1].set_xlabel("time [s]")
+    axes[1, 1].grid(True, alpha=0.4)
+    
+    # Create legend for labels
+    if all_labels:
+        legend_patches = [
+            mpatches.Patch(color=label_colors[label], label=label, alpha=0.3)
+            for label in sorted(all_labels)
+        ]
+        fig.legend(handles=legend_patches, loc='upper center', 
+                  ncol=min(len(legend_patches), 6), bbox_to_anchor=(0.5, 0.98),
+                  title='Activity Labels')
+    
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    if show:
+        plt.show()
+    
+    return fig
+
+
 def save_labeled_plot(
     fig: plt.Figure,
     run_id: str,
