@@ -171,6 +171,67 @@ def label_run_sensors(run: 'RunData', label_configs: Dict[str, LabelConfig]) -> 
     return labeled_sensors
 
 
+def _add_label_backgrounds(
+    ax,
+    df: pd.DataFrame,
+    tcol: str,
+    label_colors: Dict,
+    gap_factor: float = 3.0,
+) -> None:
+    """Add colored label spans while breaking regions across large time gaps."""
+    if 'label' not in df.columns or tcol not in df.columns or df.empty:
+        return
+
+    df_with_idx = df[[tcol, 'label']].reset_index(drop=True).copy()
+
+    # Estimate nominal sampling interval and treat large jumps as discontinuities.
+    dt = df_with_idx[tcol].diff().dropna()
+    positive_dt = dt[dt > 0]
+    gap_threshold = None
+    if not positive_dt.empty:
+        gap_threshold = float(positive_dt.median()) * gap_factor
+
+    def close_segment(start_idx: int, end_idx: int, label_name) -> None:
+        if start_idx is None or end_idx is None or label_name is None:
+            return
+        start_time = df_with_idx.loc[start_idx, tcol]
+        end_time = df_with_idx.loc[end_idx, tcol]
+        color = label_colors.get(label_name, '#eeeeee')
+        ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+
+    current_label = None
+    start_idx = None
+    prev_time = None
+
+    for idx in range(len(df_with_idx)):
+        time_now = df_with_idx.loc[idx, tcol]
+        label_now = df_with_idx.loc[idx, 'label']
+        if pd.isna(label_now):
+            label_now = None
+
+        gap_break = False
+        if prev_time is not None and gap_threshold is not None:
+            gap_break = (time_now - prev_time) > gap_threshold
+
+        # End region at previous row when there is a discontinuity.
+        if gap_break and current_label is not None and start_idx is not None:
+            close_segment(start_idx, idx - 1, current_label)
+            current_label = None
+            start_idx = None
+
+        if label_now != current_label:
+            if current_label is not None and start_idx is not None:
+                close_segment(start_idx, idx - 1, current_label)
+
+            current_label = label_now
+            start_idx = idx if current_label is not None else None
+
+        prev_time = time_now
+
+    if current_label is not None and start_idx is not None:
+        close_segment(start_idx, len(df_with_idx) - 1, current_label)
+
+
 def validate_label_transitions(labeled_df: pd.DataFrame, max_transitions: int = 3) -> Dict:
     """
     Validate label transitions in a labeled DataFrame.
@@ -259,40 +320,7 @@ def plot_labeled_sensors(
     
     # Helper function to add label backgrounds
     def add_label_backgrounds(ax, df, tcol):
-        """Add colored background regions for each label."""
-        if 'label' not in df.columns:
-            return
-        
-        # Group consecutive rows with same label
-        df_with_idx = df.reset_index(drop=True)
-        current_label = None
-        start_idx = None
-        
-        for idx in range(len(df_with_idx)):
-            label = df_with_idx.loc[idx, 'label']
-            
-            # Convert NaN to None for comparison
-            if pd.isna(label):
-                label = None
-                
-            if label != current_label:
-                # End previous region
-                if current_label is not None and start_idx is not None:
-                    start_time = df_with_idx.loc[start_idx, tcol]
-                    end_time = df_with_idx.loc[idx - 1, tcol]
-                    color = label_colors.get(current_label, '#eeeeee')
-                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
-                
-                # Start new region
-                current_label = label
-                start_idx = idx
-        
-        # Handle last region
-        if current_label is not None and start_idx is not None:
-            start_time = df_with_idx.loc[start_idx, tcol]
-            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
-            color = label_colors.get(current_label, '#eeeeee')
-            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+        _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
     
     # Plot accelerometer axes
     add_label_backgrounds(axes[0, 0], acc, tcol)
@@ -412,35 +440,7 @@ def plot_labeled_acc(
     
     # Helper function to add label backgrounds
     def add_label_backgrounds(ax, df, tcol):
-        """Add colored background regions for each label."""
-        if 'label' not in df.columns:
-            return
-        
-        df_with_idx = df.reset_index(drop=True)
-        current_label = None
-        start_idx = None
-        
-        for idx in range(len(df_with_idx)):
-            label = df_with_idx.loc[idx, 'label']
-            
-            if pd.isna(label):
-                label = None
-                
-            if label != current_label:
-                if current_label is not None and start_idx is not None:
-                    start_time = df_with_idx.loc[start_idx, tcol]
-                    end_time = df_with_idx.loc[idx - 1, tcol]
-                    color = label_colors.get(current_label, '#eeeeee')
-                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
-                
-                current_label = label
-                start_idx = idx
-        
-        if current_label is not None and start_idx is not None:
-            start_time = df_with_idx.loc[start_idx, tcol]
-            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
-            color = label_colors.get(current_label, '#eeeeee')
-            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+        _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
     
     # Top-left [0,0]: ax (X axis) vs time
     add_label_backgrounds(axes[0, 0], acc, tcol)
@@ -541,35 +541,7 @@ def plot_labeled_gyro(
     
     # Helper function to add label backgrounds
     def add_label_backgrounds(ax, df, tcol):
-        """Add colored background regions for each label."""
-        if 'label' not in df.columns:
-            return
-        
-        df_with_idx = df.reset_index(drop=True)
-        current_label = None
-        start_idx = None
-        
-        for idx in range(len(df_with_idx)):
-            label = df_with_idx.loc[idx, 'label']
-            
-            if pd.isna(label):
-                label = None
-                
-            if label != current_label:
-                if current_label is not None and start_idx is not None:
-                    start_time = df_with_idx.loc[start_idx, tcol]
-                    end_time = df_with_idx.loc[idx - 1, tcol]
-                    color = label_colors.get(current_label, '#eeeeee')
-                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
-                
-                current_label = label
-                start_idx = idx
-        
-        if current_label is not None and start_idx is not None:
-            start_time = df_with_idx.loc[start_idx, tcol]
-            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
-            color = label_colors.get(current_label, '#eeeeee')
-            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+        _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
     
     # Top-left [0,0]: gx (X axis) vs time
     add_label_backgrounds(axes[0, 0], gyro, tcol)
@@ -670,35 +642,7 @@ def plot_labeled_odo(
     
     # Helper function to add label backgrounds
     def add_label_backgrounds(ax, df, tcol):
-        """Add colored background regions for each label."""
-        if 'label' not in df.columns:
-            return
-        
-        df_with_idx = df.reset_index(drop=True)
-        current_label = None
-        start_idx = None
-        
-        for idx in range(len(df_with_idx)):
-            label = df_with_idx.loc[idx, 'label']
-            
-            if pd.isna(label):
-                label = None
-                
-            if label != current_label:
-                if current_label is not None and start_idx is not None:
-                    start_time = df_with_idx.loc[start_idx, tcol]
-                    end_time = df_with_idx.loc[idx - 1, tcol]
-                    color = label_colors.get(current_label, '#eeeeee')
-                    ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
-                
-                current_label = label
-                start_idx = idx
-        
-        if current_label is not None and start_idx is not None:
-            start_time = df_with_idx.loc[start_idx, tcol]
-            end_time = df_with_idx.loc[len(df_with_idx) - 1, tcol]
-            color = label_colors.get(current_label, '#eeeeee')
-            ax.axvspan(start_time, end_time, alpha=0.3, color=color, zorder=0)
+        _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
     
     # Top-left [0,0]: v1 (left wheel) vs time
     add_label_backgrounds(axes[0, 0], odo, tcol)
