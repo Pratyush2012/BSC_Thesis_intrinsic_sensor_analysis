@@ -6,6 +6,10 @@ data/processed/
 data/labeled/
 data/resampled/
 
+#reports (do not commit some reports)
+reports/labeled/
+reports/raw/Test/
+
 # Notebooks checkpoints
 .ipynb_checkpoints/
 
