@@ -7,8 +7,8 @@ data/labeled/
 data/resampled/
 
 #reports (do not commit some reports)
-reports/labeled/
 reports/raw/Test/
+reports/labeled/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
