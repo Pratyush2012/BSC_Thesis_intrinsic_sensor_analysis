@@ -741,6 +741,11 @@ def print_feature_diagnostics(
 
 
 # ── EDA visualisations ───────────────────────────────────────────────────────
+# Helper to syncronize the color of the histogram and violion plots
+def _build_class_color_map(sns, classes, palette) -> dict:
+    colors = sns.color_palette(palette, n_colors=len(classes))
+    return dict(zip(classes, colors))
+
 
 def plot_feature_distributions(
     features_df: pd.DataFrame,
@@ -767,6 +772,7 @@ def plot_feature_distributions(
         raise RuntimeError("None of the requested viz_features are in features_df.")
 
     classes   = sorted(features_df[label_col].unique())
+    class_to_color = _build_class_color_map(sns, classes, palette)
     out_files = []
 
     for feat in present:
@@ -778,6 +784,7 @@ def plot_feature_distributions(
             [features_df.loc[features_df[label_col] == cls, feat].dropna() for cls in classes],
             bins=25, alpha=0.55, edgecolor="black",
             label=[str(c) for c in classes],
+            color=[class_to_color[cls] for cls in classes]
         )
         axes[0].set_xlabel(feat)
         axes[0].set_ylabel("Count")
@@ -787,7 +794,7 @@ def plot_feature_distributions(
         # Violin
         sns.violinplot(
             data=features_df, x=label_col, y=feat,
-            ax=axes[1], inner="quartile", cut=0, palette=palette,
+            ax=axes[1], inner="quartile", cut=0, order=classes, palette=class_to_color,
         )
         axes[1].set_title("Violin by terrain class")
         axes[1].tick_params(axis="x", rotation=20)
