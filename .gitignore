@@ -9,6 +9,8 @@ data/resampled/
 #reports (do not commit some reports)
 reports/raw/Test/
 reports/labeled/
+reports/
+reports/features
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
