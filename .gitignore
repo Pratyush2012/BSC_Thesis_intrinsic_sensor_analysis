@@ -10,7 +10,7 @@ data/resampled/
 reports/raw/Test/
 reports/labeled/
 reports/
-reports/features
+reports/features/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
