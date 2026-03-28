@@ -46,7 +46,7 @@ from sklearn.preprocessing import StandardScaler
 
 # ── Column name constants ────────────────────────────────────────────────────
 ACC_COLS  = ["ax", "ay", "az"]
-GYRO_COLS = ["gx", "gy", "gz"]
+GYRO_COLS = ["gx", "gz"]  # gy (yaw) excluded — encodes turning, not terrain
 IMU_COLS  = ACC_COLS + GYRO_COLS
 
 # Columns that are metadata, not model features
@@ -97,6 +97,13 @@ def _check_columns(df: pd.DataFrame, required: list[str], df_name: str) -> None:
         raise KeyError(f"Missing columns in {df_name}: {missing}")
 
 
+def _trapz(y: np.ndarray, x: np.ndarray) -> float:
+    """Version-safe trapezoidal integration for NumPy releases with/without trapezoid."""
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))
+
+
 # ── Low-level signal feature functions ──────────────────────────────────────
 
 def zero_crossing_rate(x) -> float:
@@ -135,7 +142,7 @@ def band_power(x, fs: int, f_low: float, f_high: float) -> float:
     freqs  = np.fft.rfftfreq(n, d=1.0 / fs)
     psd    = (np.abs(np.fft.rfft(arr_dc)) ** 2) / n
     mask   = (freqs >= f_low) & (freqs <= f_high)
-    return float(np.trapezoid(psd[mask], freqs[mask])) if np.any(mask) else 0.0
+    return _trapz(psd[mask], freqs[mask]) if np.any(mask) else 0.0
 
 
 def spectral_features(x, fs: int) -> dict[str, float]:
@@ -158,7 +165,7 @@ def spectral_features(x, fs: int) -> dict[str, float]:
     n      = len(arr_dc)
     freqs  = np.fft.rfftfreq(n, d=1.0 / fs)
     psd    = (np.abs(np.fft.rfft(arr_dc)) ** 2) / n
-    total  = float(np.trapezoid(psd, freqs))
+    total  = _trapz(psd, freqs)
 
     pos = freqs > 0
     fp, pp = freqs[pos], psd[pos]
@@ -300,7 +307,7 @@ def compute_window_features(
 
     Feature groups computed
     -----------------------
-    Per IMU axis (ax, ay, az, gx, gy, gz) and magnitude (acc_mag, gyro_mag):
+    Per IMU axis (ax, ay, az, gx, gz) and magnitude (acc_mag, gyro_mag):
         - Time domain:  mean, std, min, max, range, median, iqr, skewness,
                         kurtosis, zero_crossing_rate, rms, energy, mean_abs
         - Spectral:     spectral_energy, dominant_freq, spectral_centroid,
@@ -313,7 +320,7 @@ def compute_window_features(
     Within-sensor correlations:
         acc:  corr_xy (lateral-vertical), corr_xz (lateral-longitudinal),
               corr_yz (vertical-longitudinal)
-        gyro: corr_xy (pitch-yaw), corr_xz (pitch-roll), corr_yz (yaw-roll)
+        gyro: corr_xz (pitch-roll)
 
     Cross-sensor correlations (IMU coupling — terrain discriminative):
         ay vs gx — vertical bounce × pitch  (robot nose dipping into soft terrain)
@@ -330,6 +337,13 @@ def compute_window_features(
     computation.  This removes the ≈ −1 g DC offset on ay (vertical / gravity
     axis) and any residual bias on the other axes, leaving only dynamic
     (terrain-driven) acceleration.
+
+    Gyroscope feature policy
+    ------------------------
+    gy (yaw rate) is intentionally excluded from engineered features because it
+    primarily reflects steering/turning behavior (a motion confound) rather
+    than terrain response.  Accordingly, gyro magnitude is computed from
+    pitch+roll only: sqrt(gx^2 + gz^2).
     """
     if bands is None:
         bands = DEFAULT_BANDS
@@ -372,7 +386,6 @@ def compute_window_features(
 
         # Raw gyro signals (no DC removal needed — gyro reads angular rate, not offset)
         gx_s = seg["gx"].to_numpy(dtype=float)
-        gy_s = seg["gy"].to_numpy(dtype=float)
         gz_s = seg["gz"].to_numpy(dtype=float)
 
         row: dict = {
@@ -391,14 +404,14 @@ def compute_window_features(
                 row[f"{col}_{k}"] = v
 
         # ── Per-axis gyroscope features ──────────────────────────────────
-        for col, sig in zip(GYRO_COLS, [gx_s, gy_s, gz_s]):
+        for col, sig in zip(GYRO_COLS, [gx_s, gz_s]):
             for k, v in _per_axis_features(sig, sample_rate, bands).items():
                 row[f"{col}_{k}"] = v
 
         # ── Magnitude vector features ─────────────────────────────────
         # ||acc||  and  ||gyro||  capture overall vibration intensity
         acc_mag  = np.sqrt(ax_s**2 + ay_s**2 + az_s**2)
-        gyro_mag = np.sqrt(gx_s**2 + gy_s**2 + gz_s**2)
+        gyro_mag = np.sqrt(gx_s**2 + gz_s**2)
 
         for prefix, sig in [("acc_mag", acc_mag), ("gyro_mag", gyro_mag)]:
             for k, v in _per_axis_features(sig, sample_rate, bands).items():
@@ -410,10 +423,8 @@ def compute_window_features(
         row["acc_corr_xz"] = safe_pearson(ax_s, az_s)  # lateral  × longitudinal
         row["acc_corr_yz"] = safe_pearson(ay_s, az_s)  # vertical × longitudinal
 
-        # Gyroscope
-        row["gyro_corr_xy"] = safe_pearson(gx_s, gy_s)  # pitch × yaw
+        # Gyroscope (terrain-driven axes only)
         row["gyro_corr_xz"] = safe_pearson(gx_s, gz_s)  # pitch × roll
-        row["gyro_corr_yz"] = safe_pearson(gy_s, gz_s)  # yaw   × roll
 
         # ── Cross-sensor correlations ─────────────────────────────────
         # These capture coupling between linear and rotational motion —
@@ -489,6 +500,7 @@ def get_eda_feature_columns(
         "_spectral_energy", "_dominant_freq",
         "_spectral_centroid", "_spectral_entropy",
         "_bandpower_40_80Hz",
+        "gy_",  # yaw rate — turning artefact, excluded from all analysis
     ]
     return [c for c in all_feats if not any(t in c for t in drop_tokens)]
 
@@ -518,10 +530,17 @@ def split_velocity_regime_datasets(
     mean_thresh  : max mean speed for Dataset B (m/s).
     std_thresh   : max speed std for Dataset B (enforces near-constant speed).
     """
-    _check_columns(df, [vel_col, "odom_speed_std", label_col], "features_df")
+    _check_columns(df, [vel_col, label_col], "features_df")
+
+    has_speed_std = "odom_speed_std" in df.columns
+    if not has_speed_std and verbose:
+        print("[WARNING] 'odom_speed_std' not found; applying Dataset B filter using mean speed only.")
 
     dataset_A = df.copy()
-    mask      = (df[vel_col] < mean_thresh) & (df["odom_speed_std"] < std_thresh)
+    if has_speed_std:
+        mask = (df[vel_col] < mean_thresh) & (df["odom_speed_std"] < std_thresh)
+    else:
+        mask = df[vel_col] < mean_thresh
     dataset_B = df[mask].copy().reset_index(drop=True)
 
     if verbose:
@@ -538,7 +557,10 @@ def split_velocity_regime_datasets(
         print()
         print(sep)
         print(f"DATASET B — Speed-controlled subset")
-        print(f"  Criteria : {vel_col} < {mean_thresh} m/s  AND  odom_speed_std < {std_thresh} m/s")
+        if has_speed_std:
+            print(f"  Criteria : {vel_col} < {mean_thresh} m/s  AND  odom_speed_std < {std_thresh} m/s")
+        else:
+            print(f"  Criteria : {vel_col} < {mean_thresh} m/s  (odom_speed_std unavailable)")
         print(sep)
         print(f"  Windows kept    : {n_kept:>5}  ({n_kept / n_total * 100:.1f}%)")
         print(f"  Windows removed : {n_total - n_kept:>5}  ({(n_total - n_kept) / n_total * 100:.1f}%)")
@@ -943,19 +965,31 @@ def _stratified_sample(
 ) -> pd.DataFrame:
     """Stratified subsample keeping class proportions."""
     if len(df) <= cap:
-        return df
-    sampled = (
-        df.groupby(label_col, group_keys=False)
-        .apply(
-            lambda g: g.sample(
-                n=max(1, int(cap * len(g) / len(df))),
-                random_state=random_state,
-            ),
-            include_groups=False,
-        )
-    )
-    if label_col not in sampled.columns:
-        sampled = sampled.join(df[[label_col]])
+        return df.reset_index(drop=True)
+
+    groups = list(df.groupby(label_col, sort=False))
+    sampled_parts: list[pd.DataFrame] = []
+
+    for _, g in groups:
+        n_target = max(1, int(cap * len(g) / len(df)))
+        n_target = min(n_target, len(g))
+        sampled_parts.append(g.sample(n=n_target, random_state=random_state))
+
+    sampled = pd.concat(sampled_parts, axis=0)
+
+    # Fill/trim to the exact cap while preserving label integrity.
+    if len(sampled) < cap:
+        remainder = df.drop(index=sampled.index, errors="ignore")
+        if not remainder.empty:
+            n_extra = min(cap - len(sampled), len(remainder))
+            sampled = pd.concat(
+                [sampled, remainder.sample(n=n_extra, random_state=random_state)],
+                axis=0,
+            )
+    elif len(sampled) > cap:
+        sampled = sampled.sample(n=cap, random_state=random_state)
+
+    sampled = sampled.sample(frac=1.0, random_state=random_state)
     return sampled.reset_index(drop=True)
 
 
