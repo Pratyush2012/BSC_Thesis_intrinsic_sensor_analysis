@@ -21,5 +21,8 @@ __pycache__/
 .venv/
 venv/
 
+# Models
+models/
+
 # OS files
 .DS_Store
