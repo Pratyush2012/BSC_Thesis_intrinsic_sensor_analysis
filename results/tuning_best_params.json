@@ -9,8 +9,8 @@
   },
   "XGBoost": {
     "clf__subsample": 1.0,
-    "clf__n_estimators": 300,
-    "clf__max_depth": 9,
-    "clf__learning_rate": 0.1
+    "clf__n_estimators": 500,
+    "clf__max_depth": 6,
+    "clf__learning_rate": 0.2
   }
 }
