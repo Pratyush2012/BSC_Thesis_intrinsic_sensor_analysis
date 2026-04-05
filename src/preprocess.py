@@ -17,6 +17,61 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+def resample_sensors(
+    acc: pd.DataFrame,
+    gyro: pd.DataFrame,
+    odo: pd.DataFrame,
+    target_hz: float = 100.0,
+    tcol: str = "t_rel",
+    method: str = "linear",
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Resample accelerometer, gyroscope, and odometry to a common sample rate.
+
+    Creates a unified time grid spanning all three sensors and interpolates each
+    to that grid.  The label column, if present, is forward-filled (nearest prior
+    label) rather than interpolated.
+
+    Args:
+        acc: Accelerometer DataFrame with a time column and signal columns.
+        gyro: Gyroscope DataFrame.
+        odo: Odometry DataFrame.
+        target_hz: Target sample rate in Hz (default: 100).
+        tcol: Name of the time column (default: 't_rel').
+        method: Interpolation method — ``'linear'`` or ``'nearest'``.
+
+    Returns:
+        Tuple of ``(acc_resampled, gyro_resampled, odo_resampled)``.
+    """
+    t_min = min(acc[tcol].min(), gyro[tcol].min(), odo[tcol].min())
+    t_max = max(acc[tcol].max(), gyro[tcol].max(), odo[tcol].max())
+    dt = 1.0 / target_hz
+    unified_time = np.arange(t_min, t_max + dt / 2, dt)
+
+    def _interpolate(df: pd.DataFrame) -> pd.DataFrame:
+        label_col = "label" if "label" in df.columns else None
+        numeric_cols = [c for c in df.columns if c != tcol and c != label_col]
+
+        data: dict = {}
+        for col in numeric_cols:
+            if method == "linear":
+                data[col] = np.interp(unified_time, df[tcol].to_numpy(float), df[col].to_numpy(float))
+            elif method == "nearest":
+                idx = np.clip(np.searchsorted(df[tcol], unified_time), 0, len(df) - 1)
+                data[col] = df[col].iloc[idx].to_numpy()
+            else:
+                raise ValueError(f"Unknown interpolation method: {method!r}")
+
+        if label_col:
+            idx = np.clip(np.searchsorted(df[tcol], unified_time, side="right") - 1, 0, len(df) - 1)
+            data[label_col] = df[label_col].iloc[idx].to_numpy()
+
+        result = pd.DataFrame(data)
+        result.insert(0, tcol, unified_time)
+        return result.reset_index(drop=True)
+
+    return _interpolate(acc), _interpolate(gyro), _interpolate(odo)
+
+
 def qc_stats(df: pd.DataFrame, tcol: str = "t_rel", gap_factor: float = 5.0) -> dict[str, float | int]:
     """Compute compact timing/QC statistics for a sensor frame.
 
