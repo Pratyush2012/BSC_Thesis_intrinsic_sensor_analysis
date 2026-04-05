@@ -6,9 +6,9 @@ from pathlib import Path
 import json
 import pandas as pd
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import matplotlib.cm as cm
 
 
 if TYPE_CHECKING:
@@ -65,13 +65,13 @@ def assign_label(timestamp: float, label_configs: Dict[str, LabelConfig]) -> Opt
         label_configs: Dictionary of label configurations
         
     Returns:
-        Label name if timestamp falls in a range, NaN otherwise
+        Label name if timestamp falls in a range, None otherwise
     """
     for label_name, config in label_configs.items():
         for label_range in config.ranges:
             if label_range.start <= timestamp <= label_range.end:
                 return label_name
-    return float('nan')  # Return NaN if no label matches
+    return None
 
 
 def label_dataframe(df: pd.DataFrame, 
@@ -232,6 +232,29 @@ def _add_label_backgrounds(
         close_segment(start_idx, len(df_with_idx) - 1, current_label)
 
 
+def _build_label_color_map(dfs: list) -> Dict:
+    """Return a {label: pastel_rgba} mapping built from all unique labels in *dfs*.
+
+    Uses matplotlib's tab10 colormap (index-cycled for >10 labels) and lightens
+    each colour by adding 0.4 to the RGB channels.
+    """
+    all_labels: set = set()
+    for df in dfs:
+        if isinstance(df, pd.DataFrame) and 'label' in df.columns:
+            all_labels.update(df['label'].dropna().unique())
+
+    if not all_labels:
+        return {}
+
+    cmap = matplotlib.colormaps['tab10']
+    label_colors: Dict = {}
+    for i, label in enumerate(sorted(all_labels)):
+        rgba = cmap(i % 10)
+        light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
+        label_colors[label] = light_color
+    return label_colors
+
+
 def validate_label_transitions(labeled_df: pd.DataFrame, max_transitions: int = 3) -> Dict:
     """
     Validate label transitions in a labeled DataFrame.
@@ -293,32 +316,10 @@ def plot_labeled_sensors(
         matplotlib Figure object
     """
     fig, axes = plt.subplots(3, 2, figsize=(14, 10))
-    
-    # Find all unique labels across all sensors
-    all_labels = set()
-    for df in [acc, gyro, odo]:
-        if 'label' in df.columns:
-            unique_labels = df['label'].dropna().unique()
-            all_labels.update(unique_labels)
-    
-    # Dynamically assign colors to labels using matplotlib's tab10 colormap
-    # Convert to light pastel colors for background highlighting
-    if all_labels:
-        sorted_labels = sorted(all_labels)
-        n_labels = len(sorted_labels)
-        
-        # Use tab10 for up to 10 labels, then cycle through if more
-        cmap = cm.get_cmap('tab10')
-        label_colors = {}
-        for i, label in enumerate(sorted_labels):
-            rgba = cmap(i % 10)
-            # Convert to lighter pastel version (increase brightness)
-            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
-            label_colors[label] = light_color
-    else:
-        label_colors = {}
-    
-    # Helper function to add label backgrounds
+
+    label_colors = _build_label_color_map([acc, gyro, odo])
+    all_labels = set(label_colors.keys())
+
     def add_label_backgrounds(ax, df, tcol):
         _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
     
@@ -419,29 +420,13 @@ def plot_labeled_acc(
         matplotlib Figure object
     """
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    
-    # Find all unique labels
-    all_labels = set()
-    if 'label' in acc.columns:
-        unique_labels = acc['label'].dropna().unique()
-        all_labels.update(unique_labels)
-    
-    # Dynamically assign colors to labels
-    if all_labels:
-        sorted_labels = sorted(all_labels)
-        cmap = cm.get_cmap('tab10')
-        label_colors = {}
-        for i, label in enumerate(sorted_labels):
-            rgba = cmap(i % 10)
-            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
-            label_colors[label] = light_color
-    else:
-        label_colors = {}
-    
-    # Helper function to add label backgrounds
+
+    label_colors = _build_label_color_map([acc])
+    all_labels = set(label_colors.keys())
+
     def add_label_backgrounds(ax, df, tcol):
         _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
-    
+
     # Top-left [0,0]: ax (X axis) vs time
     add_label_backgrounds(axes[0, 0], acc, tcol)
     axes[0, 0].plot(acc[tcol], acc["ax"], label="ax", linewidth=0.8, color='C0')
@@ -520,29 +505,13 @@ def plot_labeled_gyro(
         matplotlib Figure object
     """
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    
-    # Find all unique labels
-    all_labels = set()
-    if 'label' in gyro.columns:
-        unique_labels = gyro['label'].dropna().unique()
-        all_labels.update(unique_labels)
-    
-    # Dynamically assign colors to labels
-    if all_labels:
-        sorted_labels = sorted(all_labels)
-        cmap = cm.get_cmap('tab10')
-        label_colors = {}
-        for i, label in enumerate(sorted_labels):
-            rgba = cmap(i % 10)
-            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
-            label_colors[label] = light_color
-    else:
-        label_colors = {}
-    
-    # Helper function to add label backgrounds
+
+    label_colors = _build_label_color_map([gyro])
+    all_labels = set(label_colors.keys())
+
     def add_label_backgrounds(ax, df, tcol):
         _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
-    
+
     # Top-left [0,0]: gx (X axis) vs time
     add_label_backgrounds(axes[0, 0], gyro, tcol)
     axes[0, 0].plot(gyro[tcol], gyro["gx"], label="gx", linewidth=0.8, color='C0')
@@ -621,29 +590,13 @@ def plot_labeled_odo(
         matplotlib Figure object
     """
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    
-    # Find all unique labels
-    all_labels = set()
-    if 'label' in odo.columns:
-        unique_labels = odo['label'].dropna().unique()
-        all_labels.update(unique_labels)
-    
-    # Dynamically assign colors to labels
-    if all_labels:
-        sorted_labels = sorted(all_labels)
-        cmap = cm.get_cmap('tab10')
-        label_colors = {}
-        for i, label in enumerate(sorted_labels):
-            rgba = cmap(i % 10)
-            light_color = tuple(min(1.0, c + 0.4) if j < 3 else c for j, c in enumerate(rgba))
-            label_colors[label] = light_color
-    else:
-        label_colors = {}
-    
-    # Helper function to add label backgrounds
+
+    label_colors = _build_label_color_map([odo])
+    all_labels = set(label_colors.keys())
+
     def add_label_backgrounds(ax, df, tcol):
         _add_label_backgrounds(ax=ax, df=df, tcol=tcol, label_colors=label_colors)
-    
+
     # Top-left [0,0]: v1 (left wheel) vs time
     add_label_backgrounds(axes[0, 0], odo, tcol)
     axes[0, 0].plot(odo[tcol], odo["v1"], label="v1", linewidth=0.8, color='C0')
