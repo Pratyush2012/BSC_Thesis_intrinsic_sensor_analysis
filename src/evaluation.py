@@ -14,6 +14,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 try:
     from xgboost import XGBClassifier
@@ -28,7 +29,7 @@ def make_base_models(random_state: int) -> dict[str, Pipeline]:
         random_state: Seed passed to every stochastic estimator.
 
     Returns:
-        ``{'LogisticRegression': ..., 'RandomForest': ..., 'XGBoost': ...}``
+        ``{'LogisticRegression': ..., 'RandomForest': ..., 'XGBoost': ..., 'SVM': ...}``
     """
     return {
         "LogisticRegression": Pipeline([
@@ -58,6 +59,15 @@ def make_base_models(random_state: int) -> dict[str, Pipeline]:
                 subsample=0.8,
                 colsample_bytree=0.8,
                 eval_metric="mlogloss",
+                random_state=random_state,
+            )),
+        ]),
+        "SVM": Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", SVC(
+                kernel="rbf",
+                C=1.0,
+                gamma="scale",
                 random_state=random_state,
             )),
         ]),
