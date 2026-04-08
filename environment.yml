@@ -13,6 +13,7 @@ dependencies:
   - joblib>=1.2
   - jupyter>=1.0
   - ipykernel>=6.0
+  - pyarrow>=23.0
   - pip
   - pip:
       - xgboost>=1.7
