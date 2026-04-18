@@ -74,6 +74,32 @@ def make_base_models(random_state: int) -> dict[str, Pipeline]:
     }
 
 
+def make_tuned_models(
+    random_state: int,
+    best_params: dict[str, dict[str, object]],
+) -> dict[str, Pipeline]:
+    """Return Pipelines identical to make_base_models() but with tuned hyperparameters.
+
+    Starts from the same Pipeline structure as make_base_models() and applies each
+    model's best hyperparameters via Pipeline.set_params(**params). Keys must use the
+    sklearn Pipeline format, e.g. ``clf__C`` for the ``C`` parameter on the ``clf`` step.
+
+    Args:
+        random_state: Seed passed to every stochastic estimator.
+        best_params: Dict mapping model name → Pipeline-format param overrides,
+            e.g. ``{"LogisticRegression": {"clf__C": 0.1}}``.
+            Loaded from ``results/tuning_best_params.json``.
+
+    Returns:
+        Same structure as make_base_models() with tuned params applied.
+    """
+    models = make_base_models(random_state)
+    for model_name, params in best_params.items():
+        if model_name in models:
+            models[model_name].set_params(**params)
+    return models
+
+
 def compute_fold_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,

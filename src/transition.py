@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
 import seaborn as sns
 
 # ---------------------------------------------------------------------------
@@ -51,7 +52,7 @@ _HERE = Path(__file__).resolve().parent.parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from src.evaluation import make_base_models
+from src.evaluation import make_base_models, make_tuned_models
 
 # ===========================================================================
 # CONSTANTS
@@ -300,6 +301,7 @@ def run_classical_loro_cv(
     model_name: str = "RandomForest",
     imbalance: str = "balanced",
     random_state: int = 42,
+    best_params: dict | None = None,
 ) -> pd.DataFrame:
     """
     Generate per-window predictions for a classical model via LORO-CV.
@@ -317,6 +319,10 @@ def run_classical_loro_cv(
         model_name: One of 'RandomForest', 'XGBoost', 'LogisticRegression', 'SVM'.
         imbalance: 'balanced' or 'unweighted'.
         random_state: Reproducibility seed.
+        best_params: If provided, tuned hyperparameters applied via make_tuned_models().
+            Keys use sklearn Pipeline format, e.g. ``{"LogisticRegression": {"clf__C": 0.1}}``.
+            Loaded from ``results/tuning_best_params.json``. When None, default
+            make_base_models() parameters are used.
 
     Returns:
         Copy of df with added 'pred_label' column (string labels, index-aligned).
@@ -334,7 +340,10 @@ def run_classical_loro_cv(
         y_train_str = df.loc[train_mask, label_col].astype(str).to_numpy()
         y_test_str = df.loc[test_mask, label_col].astype(str).to_numpy()
 
-        models = make_base_models(random_state)
+        if best_params is not None:
+            models = make_tuned_models(random_state, best_params)
+        else:
+            models = make_base_models(random_state)
         pipeline = models[model_name]
 
         if is_xgb:
@@ -558,9 +567,19 @@ def run_cnn_loro_cv(
         cnn_df = cnn_df.set_index("window_id").loc[feature_df["window_id"].values].reset_index()
         cnn_df.index = feature_df.index
     else:
-        # Assume order already matches
+        if len(cnn_df) != len(feature_df):
+            raise ValueError(
+                f"cnn_df has {len(cnn_df)} rows but feature_df has {len(feature_df)} rows. "
+                "Add 'window_id' to both DataFrames for reliable alignment."
+            )
         cnn_df = cnn_df.copy()
         cnn_df.index = feature_df.index
+        warnings.warn(
+            "CNN alignment: 'window_id' not found in one or both DataFrames; "
+            "assuming row order already matches.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     pred_labels = pd.Series(index=feature_df.index, dtype=object)
 
@@ -1039,7 +1058,7 @@ def plot_transition_timeline(
                        alpha=0.9, zorder=6)
             delay_sec = row["detection_delay_sec"]
             ax.text(
-                row["detection_time"] + 0.05 * (t_max - t_min) * 0.01,
+                row["detection_time"] + 0.005 * (t_max - t_min),
                 0.95,
                 f"+{delay_sec:.1f}s",
                 transform=ax.get_xaxis_transform(),
@@ -1068,10 +1087,10 @@ def plot_transition_timeline(
         for lbl in LABEL_ORDER if lbl in all_labels
     ]
     legend_patches += [
-        mpatches.Patch(color="black", label="GT transition", linestyle="--", fill=False),
-        mpatches.Patch(color="#2ca02c", label="Detection (on time)"),
-        mpatches.Patch(color="orange", label="Detection (late)"),
-        mpatches.Patch(color="red", label="Missed"),
+        Line2D([0], [0], color="black",   linestyle="--", linewidth=1.5, label="GT transition"),
+        Line2D([0], [0], color="#2ca02c", linestyle="-",  linewidth=2.0, label="Detection (on time)"),
+        Line2D([0], [0], color="orange",  linestyle="-",  linewidth=2.0, label="Detection (late)"),
+        Line2D([0], [0], color="red",     linestyle=":",  linewidth=2.0, label="Missed"),
     ]
     ax.legend(handles=legend_patches, loc="upper right", fontsize=7,
               ncol=2, framealpha=0.7)
