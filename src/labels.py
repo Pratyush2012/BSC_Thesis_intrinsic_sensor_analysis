@@ -149,6 +149,16 @@ def discover_labeled_runs(raw_root: Path) -> Dict[Path, Path]:
             if label_config_path:
                 runs_with_labels[run_dir] = label_config_path
     
+    # Look for Run1/Run2 style directories with labels_config at that level (Farm dataset)
+    for test_dir in test_dirs:
+        # Check subdirectories (Run1, Run2, etc.)
+        for subdir in test_dir.iterdir():
+            if subdir.is_dir() and (subdir / "labels_config.json").exists():
+                # Verify it has sensor data before adding
+                sensor_files = list(subdir.glob("log_t0_*.txt")) + list(subdir.glob("log_t0_*.csv"))
+                if sensor_files:
+                    runs_with_labels[subdir] = subdir / "labels_config.json"
+    
     return runs_with_labels
 
 

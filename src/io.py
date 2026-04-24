@@ -241,3 +241,14 @@ def save_labeled_run(run_data: RunData, output_root: str | Path) -> None:
     
     if run_data.pose is not None:
         run_data.pose.to_csv(run_output_dir / "log_t0_pose.csv", index=False)
+
+
+
+if __name__ == "__main__":
+    # Example usage: load all runs from raw data and print summary
+    RAW_ROOT = Path("data/raw/Farm/Run2")
+    runs = load_run(RAW_ROOT)
+    print(f"Loaded {len(runs)} valid runs from {RAW_ROOT}")
+    for run in runs:
+        print(f"Run {run.run_id}: acc={len(run.acc)} gyro={len(run.gyro)} odo={len(run.odo)} pose={len(run.pose) if run.pose is not None else 'N/A'}")
+        

@@ -311,7 +311,7 @@ def build_dataset_qc_table(
         expected_fs_ranges = {
             "acc": (70.0, 100.0),
             "gyro": (70.0, 100.0),
-            "odo": (100.0, 150.0),
+            "odo": (80.0, 130.0),
         }
 
     rows = []
