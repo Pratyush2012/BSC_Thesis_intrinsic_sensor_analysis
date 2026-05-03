@@ -58,22 +58,6 @@ from src.evaluation import make_base_models, make_tuned_models
 # CONSTANTS
 # ===========================================================================
 
-LABEL_ORDER: list[str] = [
-    "cobblestone",
-    "dry_dirt_track",
-    "grass",
-    "muddy_dirt_track",
-    "smooth_terrain",
-]
-
-TERRAIN_COLORS: dict[str, str] = {
-    "cobblestone":      "#e07b39",
-    "dry_dirt_track":   "#c4a35a",
-    "grass":            "#5aab61",
-    "muddy_dirt_track": "#7b5ea7",
-    "smooth_terrain":   "#4f8bc9",
-}
-
 ID_COLS: list[str] = [
     "window_id", "run_id", "segment_id", "label",
     "t_start", "t_end", "n_samples",
@@ -971,6 +955,7 @@ def plot_transition_timeline(
     ax: plt.Axes | None = None,
     label_colors: dict | None = None,
     title: str | None = None,
+    LABEL_ORDER: list[str] = None,
 ) -> plt.Figure:
     """
     Plot ground-truth vs predicted terrain label over time for a single run.
@@ -990,17 +975,24 @@ def plot_transition_timeline(
         pred_col: Predicted label column.
         run_id: Used in the plot title; inferred from df['run_id'] if None.
         ax: Existing Axes to draw on. If None, a new Figure is created.
-        label_colors: Dict mapping label → color. Defaults to TERRAIN_COLORS.
+        label_colors: Dict mapping label → color.
         title: Optional title override.
 
     Returns:
         matplotlib Figure.
     """
     plt.style.use("seaborn-v0_8-darkgrid")
-    colors = label_colors or TERRAIN_COLORS
+    colors = label_colors if label_colors is not None else {}
     all_labels = sorted(set(df[true_col].dropna().unique()) | set(df[pred_col].dropna().unique()))
 
-    # Assign color to any label not in TERRAIN_COLORS
+    # Assign color from LABEL_ORDER if available, otherwise use palette
+    if LABEL_ORDER:
+        palette = sns.color_palette("husl", len(LABEL_ORDER))
+        for i, lbl in enumerate(LABEL_ORDER):
+            if lbl not in colors:
+                colors[lbl] = palette[i]
+    
+    # Assign color to any remaining labels not in LABEL_ORDER
     palette = sns.color_palette("husl", len(all_labels))
     for i, lbl in enumerate(all_labels):
         if lbl not in colors:
