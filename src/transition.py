@@ -876,6 +876,369 @@ def analyze_transitions(
     return transitions_df, summary
 
 
+# ===========================================================================
+# PROBABILITY VARIANTS
+#
+# These mirror the *_loro_cv functions above but return a (N_windows, C)
+# posterior matrix instead of (or alongside) the hard pred_label. They feed
+# the CUSUM detector in src/change_detection.py.
+#
+# Design notes:
+# - Class order is fixed once from the full label set in df (sorted), so all
+#   folds produce columns in the same order. Per-fold model.classes_ may be
+#   a subset, so I always map back to the global index.
+# - Output is a numpy array aligned to df.index (same row order), plus the
+#   canonical class list. This is what the CUSUM bank consumes.
+# - Hard labels are also returned for sanity-check / backwards compatibility.
+# ===========================================================================
+
+def _global_classes(df: pd.DataFrame, label_col: str) -> list[str]:
+    """Canonical sorted class list from the full label column."""
+    return sorted(df[label_col].astype(str).unique().tolist())
+
+
+def _scatter_proba(
+    fold_proba: np.ndarray,
+    fold_classes: np.ndarray,
+    global_classes: list[str],
+) -> np.ndarray:
+    """
+    Re-order a fold's proba matrix into the global class column order.
+
+    sklearn's predict_proba returns columns in the order of model.classes_,
+    which can be a subset (or a different order) of the global label set.
+    This puts each column in the correct global slot and zero-fills any
+    classes the model didn't see in its training fold.
+    """
+    n_rows = fold_proba.shape[0]
+    out = np.zeros((n_rows, len(global_classes)), dtype=float)
+    name_to_idx = {c: i for i, c in enumerate(global_classes)}
+    for j, cls in enumerate(fold_classes):
+        out[:, name_to_idx[str(cls)]] = fold_proba[:, j]
+    return out
+
+
+def run_classical_loro_cv_proba(
+    df: pd.DataFrame,
+    feature_cols: list[str],
+    label_col: str = "label",
+    run_col: str = "run_id",
+    model_name: str = "RandomForest",
+    imbalance: str = "balanced",
+    random_state: int = 42,
+    best_params: dict | None = None,
+) -> tuple[np.ndarray, list[str], pd.Series]:
+    """
+    LORO-CV variant that returns soft posteriors instead of hard labels.
+
+    Mirrors run_classical_loro_cv() exactly for fitting; only the inference
+    step changes (predict_proba instead of predict). SVM is forced to
+    probability=True so it actually exposes posteriors — base/tuned configs
+    don't enable it because the standard eval doesn't need it.
+
+    Returns:
+        proba       : (N_windows, C) np.ndarray, row-aligned to df.index.
+        classes     : list[str] of length C, the global class order.
+        pred_label  : pd.Series of argmax labels (for sanity vs the hard run).
+    """
+    classes = _global_classes(df, label_col)
+    n_classes = len(classes)
+    proba_full = np.zeros((len(df), n_classes), dtype=float)
+    pred_labels = pd.Series(index=df.index, dtype=object)
+    is_xgb = model_name == "XGBoost"
+
+    run_ids = sorted(df[run_col].unique().tolist())
+
+    for test_run in run_ids:
+        train_mask = df[run_col].astype(str) != str(test_run)
+        test_mask = ~train_mask
+
+        X_train = df.loc[train_mask, feature_cols]
+        X_test = df.loc[test_mask, feature_cols]
+        y_train_str = df.loc[train_mask, label_col].astype(str).to_numpy()
+
+        if best_params is not None:
+            models = make_tuned_models(random_state, best_params)
+        else:
+            models = make_base_models(random_state)
+        pipeline = models[model_name]
+
+        # SVM needs probability=True to expose predict_proba — flip it on here
+        # without touching the global model factory.
+        if model_name == "SVM":
+            try:
+                pipeline.set_params(clf__probability=True)
+            except ValueError:
+                pass
+
+        if is_xgb:
+            le = LabelEncoder()
+            y_train_enc = le.fit_transform(y_train_str)
+            if imbalance == "balanced":
+                sw = compute_sample_weight("balanced", y_train_enc)
+                pipeline.fit(X_train, y_train_enc, clf__sample_weight=sw)
+            else:
+                pipeline.fit(X_train, y_train_enc)
+            fold_proba = pipeline.predict_proba(X_test)
+            # XGBoost classes_ are encoded ints; map back to strings via le
+            fold_classes = le.inverse_transform(pipeline.named_steps["clf"].classes_)
+        else:
+            if imbalance == "balanced":
+                try:
+                    pipeline.set_params(clf__class_weight="balanced")
+                except ValueError:
+                    pass
+            pipeline.fit(X_train, y_train_str)
+            fold_proba = pipeline.predict_proba(X_test)
+            fold_classes = pipeline.named_steps["clf"].classes_
+
+        scattered = _scatter_proba(fold_proba, fold_classes, classes)
+        # df.index isn't always positional, so write via a positional view
+        test_pos = np.where(test_mask.to_numpy())[0]
+        proba_full[test_pos] = scattered
+        pred_labels.iloc[test_pos] = np.array(classes)[np.argmax(scattered, axis=1)]
+
+    return proba_full, classes, pred_labels
+
+
+def run_mlp_loro_cv_proba(
+    df: pd.DataFrame,
+    feature_cols: list[str],
+    label_col: str = "label",
+    run_col: str = "run_id",
+    hidden_dims: list[int] | None = None,
+    dropout_rate: float = 0.3,
+    batch_size: int = 32,
+    max_epochs: int = 200,
+    patience: int = 20,
+    learning_rate: float = 1e-3,
+    weight_decay: float = 1e-4,
+    val_split: float = 0.15,
+    random_state: int = 42,
+) -> tuple[np.ndarray, list[str], pd.Series]:
+    """
+    MLP LORO-CV that returns softmax posteriors.
+
+    Same training loop as run_mlp_loro_cv() — I just plug in a softmax pass
+    over the test loader instead of the argmax. Per-fold LabelEncoder is
+    re-mapped to the global class order before writing into proba_full.
+    """
+    if not _TORCH_AVAILABLE:
+        raise ImportError("PyTorch required for run_mlp_loro_cv_proba.")
+
+    if hidden_dims is None:
+        hidden_dims = [256, 128, 64]
+
+    classes = _global_classes(df, label_col)
+    n_classes = len(classes)
+    proba_full = np.zeros((len(df), n_classes), dtype=float)
+    pred_labels = pd.Series(index=df.index, dtype=object)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    run_ids = sorted(df[run_col].unique().tolist())
+
+    for test_run in run_ids:
+        train_mask = df[run_col].astype(str) != str(test_run)
+        test_mask = ~train_mask
+
+        y_train_str = df.loc[train_mask, label_col].astype(str).to_numpy()
+        y_test_str = df.loc[test_mask, label_col].astype(str).to_numpy()
+
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(df.loc[train_mask, feature_cols])
+        X_test_scaled = scaler.transform(df.loc[test_mask, feature_cols])
+
+        X_tr, X_val, y_tr_str, y_val_str = train_test_split(
+            X_train_scaled, y_train_str,
+            test_size=val_split,
+            stratify=y_train_str,
+            random_state=random_state,
+        )
+
+        le = LabelEncoder()
+        y_tr_enc = le.fit_transform(y_tr_str)
+        y_val_enc = le.transform(y_val_str)
+        # If a class is absent from this fold's training set we'd get a
+        # KeyError below. Doesn't happen on the Farm split but guard anyway.
+        y_test_enc = np.array(
+            [le.transform([y])[0] if y in le.classes_ else -1 for y in y_test_str]
+        )
+
+        n_fold_classes = len(le.classes_)
+        counts = np.bincount(y_tr_enc, minlength=n_fold_classes).astype(float)
+        cw = len(y_tr_enc) / (n_fold_classes * np.maximum(counts, 1))
+        cw_tensor = torch.tensor(cw, dtype=torch.float32).to(device)
+
+        train_loader = DataLoader(TerrainDataset(X_tr, y_tr_enc),
+                                  batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(TerrainDataset(X_val, y_val_enc),
+                                batch_size=batch_size, shuffle=False)
+
+        model = TerrainMLP(
+            input_dim=X_tr.shape[1],
+            hidden_dims=hidden_dims,
+            num_classes=n_fold_classes,
+            dropout_rate=dropout_rate,
+        ).to(device)
+
+        criterion = nn.CrossEntropyLoss(weight=cw_tensor)
+        optimizer = torch.optim.Adam(model.parameters(),
+                                     lr=learning_rate, weight_decay=weight_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs, eta_min=learning_rate * 0.01
+        )
+
+        model = _train_with_early_stopping(
+            model, train_loader, val_loader, criterion, optimizer,
+            scheduler, device, max_epochs, patience,
+        )
+
+        # Forward pass over test set to get logits, then softmax. I avoid
+        # _evaluate() since it returns argmax — I want the full posterior.
+        model.eval()
+        X_test_t = torch.tensor(X_test_scaled, dtype=torch.float32).to(device)
+        with torch.no_grad():
+            logits = model(X_test_t)
+            fold_proba = torch.softmax(logits, dim=1).cpu().numpy()
+
+        scattered = _scatter_proba(fold_proba, le.classes_, classes)
+        test_pos = np.where(test_mask.to_numpy())[0]
+        proba_full[test_pos] = scattered
+        pred_labels.iloc[test_pos] = np.array(classes)[np.argmax(scattered, axis=1)]
+
+        acc = float(np.mean(pred_labels.iloc[test_pos].to_numpy() == y_test_str))
+        print(f"  MLP-proba fold {test_run}: acc={acc:.3f}")
+
+    return proba_full, classes, pred_labels
+
+
+def run_cnn_loro_cv_proba(
+    feature_df: pd.DataFrame,
+    cnn_df: pd.DataFrame,
+    label_col: str = "label",
+    run_col: str = "run_id",
+    filters: list[int] | None = None,
+    kernels: list[int] | None = None,
+    dropout_rate: float = 0.3,
+    batch_size: int = 32,
+    max_epochs: int = 100,
+    patience: int = 15,
+    learning_rate: float = 1e-3,
+    weight_decay: float = 1e-4,
+    val_split: float = 0.15,
+    random_state: int = 42,
+) -> tuple[np.ndarray, list[str], pd.Series]:
+    """
+    CNN LORO-CV that returns softmax posteriors.
+
+    Same training loop as run_cnn_loro_cv() with a softmax pass over the
+    test windows at the end. cnn_df is realigned to feature_df by window_id
+    (same trick as the hard variant).
+    """
+    if not _TORCH_AVAILABLE:
+        raise ImportError("PyTorch required for run_cnn_loro_cv_proba.")
+
+    if filters is None:
+        filters = [32, 64, 128]
+    if kernels is None:
+        kernels = [7, 5, 3]
+
+    classes = _global_classes(feature_df, label_col)
+    n_classes = len(classes)
+    proba_full = np.zeros((len(feature_df), n_classes), dtype=float)
+    pred_labels = pd.Series(index=feature_df.index, dtype=object)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    run_ids = sorted(feature_df[run_col].unique().tolist())
+
+    # Align cnn_df rows to feature_df by window_id (same as hard variant)
+    if "window_id" in feature_df.columns and "window_id" in cnn_df.columns:
+        cnn_df = (cnn_df.set_index("window_id")
+                  .loc[feature_df["window_id"].values]
+                  .reset_index())
+        cnn_df.index = feature_df.index
+    else:
+        if len(cnn_df) != len(feature_df):
+            raise ValueError(
+                f"cnn_df has {len(cnn_df)} rows but feature_df has "
+                f"{len(feature_df)} rows. Add 'window_id' for safe alignment."
+            )
+        cnn_df = cnn_df.copy()
+        cnn_df.index = feature_df.index
+        warnings.warn("CNN proba: window_id missing, assuming row order matches.",
+                      UserWarning, stacklevel=2)
+
+    for test_run in run_ids:
+        train_mask = feature_df[run_col].astype(str) != str(test_run)
+        test_mask = ~train_mask
+
+        y_train_str = feature_df.loc[train_mask, label_col].astype(str).to_numpy()
+        y_test_str = feature_df.loc[test_mask, label_col].astype(str).to_numpy()
+
+        X_train_t = _build_X_tensor(cnn_df.loc[train_mask])
+        X_test_t = _build_X_tensor(cnn_df.loc[test_mask])
+
+        le = LabelEncoder()
+        y_train_enc = le.fit_transform(y_train_str)
+
+        X_tr, X_val, y_tr_enc, y_val_enc = train_test_split(
+            X_train_t, y_train_enc,
+            test_size=val_split,
+            stratify=y_train_enc,
+            random_state=random_state,
+        )
+
+        n_fold_classes = len(le.classes_)
+        counts = np.bincount(y_tr_enc, minlength=n_fold_classes).astype(float)
+        cw = len(y_tr_enc) / (n_fold_classes * np.maximum(counts, 1))
+        cw_tensor = torch.tensor(cw, dtype=torch.float32).to(device)
+
+        train_ds = TensorDataset(X_tr, torch.from_numpy(y_tr_enc.astype(np.int64)))
+        val_ds = TensorDataset(X_val, torch.from_numpy(y_val_enc.astype(np.int64)))
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+
+        model = TerrainCNN1D(
+            in_channels=len(SIGNAL_COLS),
+            num_classes=n_fold_classes,
+            filters=filters,
+            kernels=kernels,
+            dropout_rate=dropout_rate,
+        ).to(device)
+
+        criterion = nn.CrossEntropyLoss(weight=cw_tensor)
+        optimizer = torch.optim.Adam(model.parameters(),
+                                     lr=learning_rate, weight_decay=weight_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs, eta_min=learning_rate * 0.01
+        )
+
+        model = _train_with_early_stopping(
+            model, train_loader, val_loader, criterion, optimizer,
+            scheduler, device, max_epochs, patience,
+        )
+
+        # Run inference in batches — full test set at once may not fit GPU
+        model.eval()
+        fold_proba_chunks: list[np.ndarray] = []
+        with torch.no_grad():
+            for i in range(0, len(X_test_t), batch_size):
+                xb = X_test_t[i:i + batch_size].to(device)
+                logits = model(xb)
+                fold_proba_chunks.append(torch.softmax(logits, dim=1).cpu().numpy())
+        fold_proba = np.concatenate(fold_proba_chunks, axis=0)
+
+        scattered = _scatter_proba(fold_proba, le.classes_, classes)
+        test_pos = np.where(test_mask.to_numpy())[0]
+        proba_full[test_pos] = scattered
+        pred_labels.iloc[test_pos] = np.array(classes)[np.argmax(scattered, axis=1)]
+
+        acc = float(np.mean(pred_labels.iloc[test_pos].to_numpy() == y_test_str))
+        print(f"  CNN-proba fold {test_run}: acc={acc:.3f}")
+
+    return proba_full, classes, pred_labels
+
+
 def compare_models(
     df: pd.DataFrame,
     predictions_dict: dict[str, pd.Series],
