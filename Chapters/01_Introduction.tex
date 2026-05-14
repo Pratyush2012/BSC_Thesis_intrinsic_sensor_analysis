@@ -1,0 +1,176 @@
+\chapter{Introduction}
+\label{ch:introduction}
+
+\section{Motivation}
+
+Robotic intercropping is an emerging agricultural strategy that uses autonomous robots to cultivate multiple crop species in the same field. Field conditions constantly change and a robot that treats the environment as constant can lead to poor navigation, unnecessary stops, or damage to plants. \cite{RoboticIntercroppingProject2026} Therefore, this project aims to equip the robot with the ability to recognize the type of terrain that it experiences while driving, using only the available intrinsic motion sensors. Specifically, accelerometer and gyroscope measurements, together with wheel odometry, are used to capture vibration patterns, impacts, and motion signatures arising from robot–terrain interaction, including transitions between surface types.
+
+The study considers two complementary terrain scenarios. Before the main data collection, a campus route covering asphalt, grass, cobblestone, and a dirt track served as the development environment to build and test the full processing pipeline. he campus route was chosen to mimic different terrains found on the farm, while also including classes that provide an interesting contrast from the others — such as smooth asphalt roads and cobblestones. The clear distinction between asphalt and the softer surfaces also provides a useful reference point for comparison with the primary scenario: an actual farm, where grass, compacted soil, and rough dirt tracks present a harder classification problem due to their greater similarity. Data were collected across multiple repeated runs on each route — four campus runs on separate days and five farm runs across two days — to assess cross-run generalisation. The effect of driving speed was also explicitly investigated by evaluating models on both the full recorded speed range and a lower, more consistent speed regime, with the latter strategy adopted during the main farm data collection. The collected data were labelled by terrain segment, and the project developed and evaluated methods ranging from classical machine learning baselines to a convolutional neural network, also examining transition detection as a harder sub-problem.
+
+Overall, the project does not rely on external perception sensors such as cameras or LiDAR, but instead investigates the limits of proprioceptive terrain recognition. The goal is not to replace exteroceptive sensing, but to explore how intrinsic motion signals can complement it, providing a lightweight, always-available channel for terrain awareness that does not depend on lighting conditions, sensor range, or additional hardware.
+
+\newpage
+\section{BSc Learning Objectives}
+
+The BSc graduate from DTU: \cite{DTU_BachelorProjectRules2026}
+\begin{enumerate}
+    \item \textbf{Can work independently and is able to structure a major project, including meeting deadlines and organizing and planning the project work:} 
+    \begin{itemize}
+        \item Plan and Execute an 18-week project with milestones, regular supervision, and meetings, and timely delivery of intermediate artefacts (dataset freeze, baseline results, draft report).
+    \end{itemize}
+    
+
+    \item \textbf{Can summarize and interpret technical information and is fully familiar with technical problem solving through project work:} 
+    \begin{itemize}
+        \item Survey and synthesise literature on terrain classification, IMU-based event detection, time-series feature extraction, and model evaluation under domain shift; interpret results in relation to robotic intercropping requirements.
+    \end{itemize}
+
+    \item \textbf{Is able to work with all project phases, including the preparation of proposals, solutions, and documentation:} 
+    \begin{itemize}
+        \item Formulate a concrete problem statement, specify requirements and assumptions, design the experimental protocol, implement solutions (data processing + ML models), and produce technical documentation suitable for handover and replication.
+    \end{itemize}
+
+    \item \textbf{Is able to independently acquire new knowledge and adopt a critical approach to the acquired knowledge and carry out relevant and critical information searches, and on this basis find the right methods to shed light on the problem in question:} 
+    \begin{itemize}
+        \item Independently identify relevant methods (e.g., windowing strategies, frequency features, sequence models, calibration, ML techniques), assess their assumptions/limitations, and justify the chosen approach using targeted information searches and critical comparison.
+    \end{itemize}
+
+    \item \textbf{Is able to communicate technical information, theory, and results in written, visual/graphic, and oral form:} 
+    \begin{itemize}
+        \item Present methods and findings clearly in written form (project report), visually (plots, confusion matrices, feature importance, robustness tests), and orally (status updates and final presentation).
+    \end{itemize}
+\end{enumerate}
+
+
+
+
+\newpage
+\section{Problem Statement}
+
+This thesis addresses the following question:
+
+\begin{quote}
+\emph{Can terrain type be reliably classified from accelerometer, gyroscope, and wheel odometry data collected by a wheeled agricultural robot, without any external perception sensor?}
+\end{quote}
+
+Answering this question requires addressing several sub-problems:
+\begin{enumerate}
+    \item Designing and executing a repeatable data collection protocol that produces a labelled, multi-session IMU and odometry dataset across representative terrain types, recorded on both a controlled campus development route and an operational farm.
+    \item Building a reproducible preprocessing and feature engineering pipeline that converts raw sensor logs into model-ready feature vectors.
+    \item Training and comparing multiple classifier families, from classical machine learning baselines to a convolutional neural network, under a Leave-One-Run-Out cross-validation scheme that prevents data leakage between robot runs.
+    \item Assessing how driving speed affects classification by evaluating each model on both the full recorded speed range and a lower, more consistent speed regime.
+    \item Comparing performance between the campus development scenario, where terrain classes are relatively distinct, and the farm scenario, where surfaces (grass, compacted soil, rough dirt tracks) are more similar and therefore harder to separate, to characterise how terrain similarity affects achievable accuracy with the same pipeline.
+    \item Examining transition detection, identifying the boundary between two adjacent terrain segments, as a harder sub-problem than steady-state classification.
+\end{enumerate}
+
+\section{Project Scope and Delimitations}
+
+The project focuses exclusively on proprioceptive terrain recognition; no camera,
+LiDAR, or GPS signals are used. Classification is performed offline on pre-recorded
+logs, and real-time deployment and embedded implementation are left as future work.
+
+Terrain classes are restricted to surfaces accessible within the two data collection
+campaigns: a campus route (asphalt, grass, cobblestone, dirt tracks) used to develop
+the pipeline, and a farm route (grass, soil, dirt track) used as the
+primary target scenario. Rare events such as deep puddles or steep slopes are not
+covered. The campus and farm datasets are evaluated as independent classification
+problems with their own label spaces; direct cross-domain transfer (training on one
+site and testing on the other) is not performed, as the label sets do not fully
+overlap and harmonising them would require additional data collection beyond the
+scope of this thesis.
+
+
+\newpage
+\section{Project Plan and Execution}
+\label{sec:project-plan}
+
+The project was scoped as an 18-week effort (2 February – 8 June 2026), organised
+into six phases from initial planning through to final submission. The original
+weekly plan and milestones are summarised below; the resulting Gantt chart is
+shown in Figure~\ref{fig:gantt}.
+
+\subsection{Planned Schedule}
+
+\begin{itemize}
+    \item \textbf{Phase 0 — Project Management (W1–2):} define research questions,
+          terrain classes, and success criteria; risk assessment and timeline.
+    \item \textbf{Phase 1 — Data Foundation (W2–3):} ingestion pipeline with time
+          alignment, automated quality control, and a labelling system.
+    \item \textbf{Phase 2 — Proxy Data \& Preprocessing (W2–7):} controlled proxy
+          data collection, resampling and sliding-window extraction, and the first
+          time- and frequency-domain feature set; \emph{Proxy Dataset Freeze}.
+    \item \textbf{Phase 3 — Modelling, Evaluation \& Field Collection (W8–11):}
+          classical baselines (LR, RF, XGBoost) and neural models (MLP, 1D-CNN)
+          under Leave-One-Run-Out cross-validation, followed by outdoor field data
+          collection and a proxy-to-field domain transfer evaluation.
+    \item \textbf{Phase 4 — Validation \& Documentation (W12–15):} robustness
+          tests (noise injection, sensor dropout) and the methodology and results
+          writing sprint.
+    \item \textbf{Phase 5 — Finalisation (W16–18):} introduction, literature
+          review, revisions, and submission on 10 June 2026.
+\end{itemize}
+
+\begin{figure}[htbp]
+    \centering
+    \makebox[\textwidth][c]{%
+    \resizebox{1.3\textwidth}{!}{%
+    % --- paste the existing ganttchart environment here unchanged ---
+    }}
+    \caption{Originally planned project timeline (2 February – 10 June 2026).}
+    \label{fig:gantt}
+\end{figure}
+
+\subsection{Deviations from the Plan}
+
+The overall phase structure held, but several elements shifted in scope or
+timing as the work progressed:
+
+\begin{itemize}
+    \item \textbf{Data collection ran longer than planned.} Campus data
+          collection was originally scheduled for 15 February – 7 March 2026
+          but actually spanned 23 February – 26 March, and the farm collection
+          planned for the week of 5–11 April was carried out on 21-28 April.
+          In both cases the delays were driven by robot availability and
+          maintenance issues, and by weather conditions unsuitable for outdoor
+          recording.
+    \item \textbf{Proxy data reframed as a campus development route.} The
+          original ``proxy'' phase was executed as a four-run campus data
+          collection covering asphalt, grass, cobblestone, and dirt-track
+          segments, rather than indoor controlled trials. This proved a closer
+          analogue to the farm scenario while still offering more separable
+          classes for pipeline development.
+    \item \textbf{Domain transfer evaluation dropped.} The proxy-to-field
+          domain transfer experiment planned for Week 11 was not carried out:
+          the campus and farm label spaces only partially overlap (e.g.
+          cobblestone and asphalt have no farm counterpart, and the farm
+          introduces compacted soil), so a like-for-like train-on-campus /
+          test-on-farm evaluation would have required additional aligned data
+          collection. The campus and farm datasets are therefore reported as
+          two independent classification problems, with comparison drawn at
+          the \emph{performance} level rather than via direct transfer.
+    \item \textbf{Speed-regime analysis added.} An explicit comparison between
+          the full recorded speed range and a lower, more consistent speed
+          regime was added as a separate evaluation axis, after early results
+          showed that speed variability was a major confound. The low-speed
+          strategy was subsequently adopted during the main farm collection.
+    \item \textbf{Transition detection added as a sub-problem.} An additional
+          analysis of segment-boundary detection was introduced as a harder
+          stress test of the pipeline than steady-state classification alone.
+    \item \textbf{Robustness work consolidated into the model-comparison
+          stage.} The noise-injection and sensor-dropout tests originally
+          scoped as a separate Phase 4 activity were folded into the final
+          model comparison (notebook \texttt{11\_model\_comparison}), so that
+          robustness was reported alongside per-model accuracy rather than
+          as a standalone study.
+\end{itemize}
+
+These adjustments preserved the project's central question — whether terrain
+type can be reliably classified from proprioceptive signals alone — while
+reallocating effort from experiments whose preconditions were not met
+(label-aligned cross-site transfer) toward analyses that the data actually
+supported (speed regimes, transition detection, and side-by-side campus vs.\
+farm performance under noise and dropout).
+
+
+
+\section{Thesis Outline}

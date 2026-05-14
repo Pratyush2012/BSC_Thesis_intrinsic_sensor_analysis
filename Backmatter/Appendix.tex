@@ -1,0 +1,98 @@
+\chapter{Appendix}
+\label{ch:appendix}
+
+\section{Full Model Results Tables}
+\label{app:full_results}
+
+\placeholder{Insert the complete tuned metrics summary table
+(\texttt{results/tuned\_metrics\_summary.csv}) with all model/feature-set/
+class-weighting combinations. This can be auto-generated from the CSV using
+a pandas-to-LaTeX export in notebook 11.}
+
+\section{Hyperparameter Search Spaces}
+\label{app:hyperparams}
+
+\begin{table}[H]
+\centering
+\caption{Hyperparameter search spaces used in RandomizedSearchCV (20 iterations,
+         5-fold GroupKFold on training sessions only).}
+\label{tab:hp_search}
+\begin{tabular}{lll}
+\toprule
+\textbf{Model} & \textbf{Parameter} & \textbf{Search space} \\
+\midrule
+Logistic Regression & \texttt{clf\_\_C}                   & $\{0.01, 0.1, 1, 10, 100\}$ \\
+\midrule
+\multirow{3}{*}{Random Forest}
+                    & \texttt{clf\_\_n\_estimators}       & $\{100, 200, 500\}$ \\
+                    & \texttt{clf\_\_max\_depth}          & $\{5, 10, 20, \texttt{None}\}$ \\
+                    & \texttt{clf\_\_min\_samples\_leaf}  & $\{1, 2, 5\}$ \\
+\midrule
+\multirow{4}{*}{XGBoost}
+                    & \texttt{clf\_\_n\_estimators}       & $\{200, 500\}$ \\
+                    & \texttt{clf\_\_learning\_rate}      & $\{0.05, 0.1, 0.2\}$ \\
+                    & \texttt{clf\_\_max\_depth}          & $\{4, 6, 8\}$ \\
+                    & \texttt{clf\_\_subsample}           & $\{0.8, 1.0\}$ \\
+\midrule
+\multirow{2}{*}{SVM}
+                    & \texttt{clf\_\_C}                   & $\{0.01, 0.1, 1, 10\}$ \\
+                    & \texttt{clf\_\_gamma}               & $\{\texttt{scale}, \texttt{auto}\}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{CNN Architecture Detail}
+\label{app:cnn}
+
+\begin{table}[H]
+\centering
+\caption{Detailed 1D-CNN architecture for the best configuration.
+         Input: $(200, 5)$ tensor (200 time steps $\times$ 5 channels).}
+\label{tab:cnn_arch}
+\begin{tabular}{llll}
+\toprule
+\textbf{Layer} & \textbf{Type} & \textbf{Output shape} & \textbf{Details} \\
+\midrule
+Conv1          & Conv1d        & $(194, 32)$  & kernel=7, padding=0 \\
+               & BatchNorm1d   & $(194, 32)$  & \\
+               & ReLU          & $(194, 32)$  & \\
+               & MaxPool1d     & $(97, 32)$   & pool=2 \\
+               & Dropout       & $(97, 32)$   & $p=0.5$ \\
+Conv2          & Conv1d        & $(93, 64)$   & kernel=5, padding=0 \\
+               & BatchNorm1d   & $(93, 64)$   & \\
+               & ReLU          & $(93, 64)$   & \\
+               & MaxPool1d     & $(46, 64)$   & pool=2 \\
+               & Dropout       & $(46, 64)$   & $p=0.5$ \\
+Conv3          & Conv1d        & $(44, 128)$  & kernel=3, padding=0 \\
+               & BatchNorm1d   & $(44, 128)$  & \\
+               & ReLU          & $(44, 128)$  & \\
+               & GlobalAvgPool & $(128,)$     & mean over time axis \\
+               & Dropout       & $(128,)$     & $p=0.5$ \\
+FC             & Linear        & $(5,)$       & softmax output \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Repository Structure}
+\label{app:repo}
+
+The full source code, raw data pipeline notebooks, and results files are
+available in the project repository.
+The repository follows the structure described in the project README:
+
+\begin{lstlisting}[language=bash, caption={Repository layout (top level).}]
+BSC_Thesis_intrinsic_sensor_analysis/
+├── notebooks/       # Sequential Jupyter pipeline (01 through 12)
+├── src/             # Reusable Python modules
+│   ├── features.py  # Feature engineering
+│   ├── io.py        # Sensor log parsing
+│   ├── labels.py    # Terrain label assignment
+│   ├── preprocess.py# QC, synchronisation, resampling
+│   ├── windowing.py # Signal windowing
+│   ├── evaluation.py# Model evaluation utilities
+│   └── transition.py# Transition detection analysis
+├── results/         # Model metrics, tuning outputs (CSV/JSON)
+├── reports/         # Per-run QC reports (HTML)
+├── data/            # Raw sensor logs (not tracked in git)
+└── environment.yml  # Conda environment specification
+\end{lstlisting}
