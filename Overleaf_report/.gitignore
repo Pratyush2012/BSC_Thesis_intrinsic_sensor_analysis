@@ -1,0 +1,30 @@
+# Data (do not commit)
+data/
+data/raw/
+data/interim/
+data/processed/
+data/labeled/
+data/resampled/
+
+#reports (do not commit some reports)
+reports/raw/Test/
+reports/labeled/
+reports/
+reports/features/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Python caches / environments
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Models
+models/
+
+# OS files
+.DS_Store
+.claude/
+.vscode/
