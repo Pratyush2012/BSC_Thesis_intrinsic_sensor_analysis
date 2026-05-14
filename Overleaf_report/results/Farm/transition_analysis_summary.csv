@@ -1,7 +1,0 @@
-Model,GT Transitions,Detected,Missed,Boundary,Detection Rate,Mean Delay (s),Median Delay (s),Max Delay (s),Std Delay (s)
-RandomForest,16,15,1,0,94%,8.26,0.00,75.56,21.43
-XGBoost,16,15,1,0,94%,4.20,0.00,49.49,12.72
-LogisticRegression,16,15,1,0,94%,5.44,0.00,49.49,12.78
-SVM,16,15,1,0,94%,13.21,0.00,77.35,26.28
-MLP,16,16,0,0,100%,3.58,0.00,21.81,6.17
-CNN,16,16,0,0,100%,1.85,0.00,11.71,3.58
