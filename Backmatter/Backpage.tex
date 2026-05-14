@@ -1,0 +1,18 @@
+\cleartoleftpage
+\newgeometry{left=11mm,right=11mm,top=11mm,bottom=0pt}
+\pagecolor{frontbackcolor}
+\color{\frontpagetextcolour}
+
+\begin{tikzpicture}[remember picture,overlay]
+\node[anchor=north west,xshift=8.9mm,yshift=-8.3mm] at (current page.north west)
+     {\includegraphics[width=14.75mm,keepaspectratio]{Pictures/Logos/\dtulogocolour_\targetcolourmodel.pdf}};
+\end{tikzpicture}
+
+\vspace*{\fill}
+\begin{tabular}{p{0.6\linewidth}}
+\textbf{\department}\\
+\departmentdescriber\\
+\addressI\\
+\addressII\\
+\departmentwebsite
+\end{tabular}

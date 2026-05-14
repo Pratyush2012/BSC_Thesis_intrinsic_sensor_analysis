@@ -1,0 +1,7 @@
+,LogisticRegression,XGBoost,RandomForest,SVM,MLP,CNN
+LogisticRegression,,1.0,0.4375,0.4375,0.8125,1.0
+XGBoost,1.0,,1.0,0.4375,0.625,0.8125
+RandomForest,0.4375,1.0,,0.625,0.4375,1.0
+SVM,0.4375,0.4375,0.625,,0.625,0.3125
+MLP,0.8125,0.625,0.4375,0.625,,1.0
+CNN,1.0,0.8125,1.0,0.3125,1.0,

@@ -1,0 +1,37 @@
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+
+Autonomous agricultural robots operating in dynamic field environments must adapt to
+varying terrain conditions to maintain safe and efficient navigation.
+This thesis investigates whether terrain type can be reliably inferred from
+\emph{intrinsic} sensors alone — accelerometer, gyroscope, and wheel odometry —
+without relying on cameras or LiDAR.
+
+A complete machine learning pipeline was designed and implemented, covering raw sensor
+quality control, multi-modal synchronisation at 100\,Hz, terrain labelling, signal
+cleaning, sliding-window segmentation (2\,s windows, 50\,\% overlap), and the
+extraction of over 100 time-domain and frequency-domain features per window.
+Six classifier families were evaluated under a leak-safe five-fold group
+cross-validation scheme: Logistic Regression, Random Forest, XGBoost, Support Vector
+Machine, Multilayer Perceptron (MLP), and a 1D Convolutional Neural Network (CNN).
+
+On a five-class terrain dataset collected across five recording sessions on varied
+surfaces (smooth terrain, grass, dry dirt track, muddy dirt track, and cobblestone),
+the best model — an MLP operating on the top-25 mutual-information-ranked features —
+achieved a macro-averaged F\textsubscript{1} score of 0.766.
+Classical models tuned with randomised search reached comparable performance
+(Logistic Regression: 0.775 on top-25 features), demonstrating that
+expressive feature engineering can largely close the gap between classical and
+deep models for this task.
+A simplified three-class grouping (smooth, grass, rough) raised the best F\textsubscript{1}
+to 0.974, confirming that the principal difficulty lies in distinguishing
+visually similar loose-surface classes.
+
+Sensor importance analysis revealed that the gyroscope is the most critical modality:
+zeroing gyroscope channels at test time caused a $-$38.7\,\% drop in F\textsubscript{1},
+while complete odometry ablation had a negligible impact ($-$0.5\,\%).
+Transition detection experiments showed that Random Forest and MLP can identify
+terrain changes with a median delay of under one second, even without any explicit
+change-point model.
+
+\placeholder{Update abstract with farm data results once collected (expected May–June 2026). Include cross-domain F1, transfer-learning outcome, and key farm-specific findings.}

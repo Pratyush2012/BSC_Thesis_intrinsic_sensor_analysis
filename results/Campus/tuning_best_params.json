@@ -1,0 +1,20 @@
+{
+  "LogisticRegression": {
+    "clf__C": 0.1
+  },
+  "RandomForest": {
+    "clf__n_estimators": 200,
+    "clf__min_samples_leaf": 1,
+    "clf__max_depth": 10
+  },
+  "XGBoost": {
+    "clf__subsample": 1.0,
+    "clf__n_estimators": 500,
+    "clf__max_depth": 6,
+    "clf__learning_rate": 0.2
+  },
+  "SVM": {
+    "clf__gamma": "scale",
+    "clf__C": 0.1
+  }
+}
