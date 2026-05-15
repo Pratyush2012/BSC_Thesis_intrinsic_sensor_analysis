@@ -65,40 +65,24 @@ Answering this question requires addressing several sub-problems:
 
 \section{Project Scope and Delimitations}
 
-The project focuses exclusively on proprioceptive terrain recognition; no camera,
-LiDAR, or GPS signals are used. Classification is performed offline on pre-recorded
-logs, and real-time deployment and embedded implementation are left as future work.
+The project focuses exclusively on proprioceptive terrain recognition; no camera, LiDAR, or GPS signals are used. Classification is performed offline on pre-recorded logs, and real-time deployment and embedded implementation are left as future work.
 
-Terrain classes are restricted to surfaces accessible within the two data collection
-campaigns: a campus route (asphalt, grass, cobblestone, dirt tracks) used to develop
-the pipeline, and a farm route (grass, soil, dirt track) used as the
-primary target scenario. Rare events such as deep puddles or steep slopes are not
-covered. The campus and farm datasets are evaluated as independent classification
-problems with their own label spaces; direct cross-domain transfer (training on one
-site and testing on the other) is not performed, as the label sets do not fully
-overlap and harmonising them would require additional data collection beyond the
-scope of this thesis.
+Terrain classes are restricted to surfaces accessible within the two data collection campaigns: a campus route (asphalt, grass, cobblestone, dirt tracks) used to develop the pipeline, and a farm route (grass, soil, dirt track) used as the primary target scenario. Rare events such as deep puddles or steep slopes are not covered. The campus and farm datasets are evaluated as independent classification problems with their own label spaces; direct cross-domain transfer (training on one site and testing on the other) is not performed, as the label sets do not fully overlap and harmonising them would require additional data collection beyond the scope of this thesis.
 
 
+%TODO: fix the project plan
 \newpage
 \section{Project Plan and Execution}
 \label{sec:project-plan}
 
-The project was scoped as an 18-week effort (2 February – 8 June 2026), organised
-into six phases from initial planning through to final submission. The original
-weekly plan and milestones are summarised below; the resulting Gantt chart is
-shown in Figure~\ref{fig:gantt}.
+The project was scoped as an 18-week effort (2 February – 8 June 2026), organised into six phases from initial planning through to final submission. The original weekly plan and milestones are summarised below; the resulting Gantt chart is shown in Figure~\ref{fig:gantt}.
 
 \subsection{Planned Schedule}
 
 \begin{itemize}
-    \item \textbf{Phase 0 — Project Management (W1–2):} define research questions,
-          terrain classes, and success criteria; risk assessment and timeline.
-    \item \textbf{Phase 1 — Data Foundation (W2–3):} ingestion pipeline with time
-          alignment, automated quality control, and a labelling system.
-    \item \textbf{Phase 2 — Proxy Data \& Preprocessing (W2–7):} controlled proxy
-          data collection, resampling and sliding-window extraction, and the first
-          time- and frequency-domain feature set; \emph{Proxy Dataset Freeze}.
+    \item \textbf{Phase 0 — Project Management (W1–2):} define research questions, terrain classes, and success criteria; risk assessment and timeline.
+    \item \textbf{Phase 1 — Data Foundation (W2–3):} ingestion pipeline with time alignment, automated quality control, and a labelling system.
+    \item \textbf{Phase 2 — Proxy Data \& Preprocessing (W2–7):} controlled proxy data collection, resampling and sliding-window extraction, and the first time- and frequency-domain feature set; \emph{Proxy Dataset Freeze}.
     \item \textbf{Phase 3 — Modelling, Evaluation \& Field Collection (W8–11):}
           classical baselines (LR, RF, XGBoost) and neural models (MLP, 1D-CNN)
           under Leave-One-Run-Out cross-validation, followed by outdoor field data
@@ -172,5 +156,5 @@ supported (speed regimes, transition detection, and side-by-side campus vs.\
 farm performance under noise and dropout).
 
 
-
+%TODO
 \section{Thesis Outline}
