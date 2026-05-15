@@ -19,14 +19,18 @@
   description  = {Official DTU study rules outlining prerequisites, content, structure, and examination norms for bachelor projects.},
 }
 
-%change detection book
-@book{Blanke2016,
-  author = {Blanke, Mogens and Kinnaert, Michel and Lunze, Jan and Staroswiecki, Marcel},
-  title  = {Diagnosis and Fault-Tolerant Control},
-  edition = {3},
-  publisher = {Springer},
-  year = {2016},
-  doi = {10.1007/978-3-662-47943-8}
+
+% Change-detection textbook (1st edition, 2003)
+@book{Blanke2003,
+  author    = {Blanke, Mogens and Kinnaert, Michel and Lunze, Jan and Staroswiecki, Marcel},
+  title     = {Diagnosis and Fault-Tolerant Control},
+  edition   = {1},
+  publisher = {Springer-Verlag Berlin Heidelberg},
+  address   = {Berlin, Heidelberg},
+  year      = {2003},
+  pages     = {205 + 229},
+  isbn      = {978-3-540-01056-2},
+  doi       = {10.1007/978-3-662-05344-7}
 }
 
 @misc{RicbotWiki,
@@ -49,6 +53,209 @@
 }
 
 
+
+
+
+% ── Additional terrain / proprioceptive references ─────────────────────────
+@article{Iagnemma2004,
+  author  = {Iagnemma, Karl and Kang, Sangbae and Shibly, Hassan and Dubowsky, Steven},
+  title   = {Online terrain parameter estimation for wheeled mobile robots
+             with application to planetary rovers},
+  journal = {IEEE Transactions on Robotics},
+  year    = {2004},
+  volume  = {20},
+  number  = {5},
+  pages   = {921--927},
+  doi     = {10.1109/TRO.2004.829462}
+}
+
+@article{DuPont2008,
+  author  = {DuPont, Edmond M. and Moore, Carl A. and Collins, Emmanuel G. and Coyle, Eric},
+  title   = {Frequency response method for terrain classification in autonomous ground vehicles},
+  journal = {Autonomous Robots},
+  year    = {2008},
+  volume  = {24},
+  number  = {4},
+  pages   = {337--347},
+  doi     = {10.1007/s10514-007-9077-0}
+}
+
+@inproceedings{Otsu2016,
+  author    = {Otsu, Kyohei and Ono, Masahiro and Fuchs, Thomas J. and Baldwin, Ian and Kubota, Takashi},
+  title     = {Autonomous terrain classification with co- and self-training approach},
+  booktitle = {IEEE Robotics and Automation Letters},
+  year      = {2016},
+  volume    = {1},
+  number    = {2},
+  pages     = {814--819},
+  doi       = {10.1109/LRA.2016.2525040}
+}
+
+@inproceedings{Komma2009,
+  author    = {Komma, Philippe and Weiss, Christian and Zell, Andreas},
+  title     = {Adaptive {B}ayesian filtering for vibration-based terrain classification},
+  booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
+  year      = {2009},
+  pages     = {3307--3313},
+  doi       = {10.1109/ROBOT.2009.5152785}
+}
+
+@inproceedings{Coyle2008,
+  author    = {Coyle, Eric and Collins, Emmanuel G.},
+  title     = {A comparison of classifier performance for vibration-based terrain classification},
+  booktitle = {26th Army Science Conference},
+  year      = {2008}
+}
+
+@inproceedings{Bermudez2012,
+  author    = {Bermudez, Fernando L. Garcia and Julian, Ryan C. and Haldane, Duncan W.
+               and Abbeel, Pieter and Fearing, Ronald S.},
+  title     = {Performance analysis and terrain classification for a legged robot
+               over rough terrain},
+  booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  year      = {2012},
+  pages     = {513--519},
+  doi       = {10.1109/IROS.2012.6386243}
+}
+
+@article{Bai2019,
+  author  = {Bai, Chengchao and Guo, Jifeng and Zheng, Hongxing},
+  title   = {Three-dimensional vibration-based terrain classification for mobile robots},
+  journal = {IEEE Access},
+  year    = {2019},
+  volume  = {7},
+  pages   = {63485--63492},
+  doi     = {10.1109/ACCESS.2019.2916480}
+}
+
+@article{Reina2016,
+  author  = {Reina, Giulio and Milella, Annalisa and Rouveure, Raphael
+             and Nielsen, Mads and Worst, Rainer and Blas, Morten Rufus},
+  title   = {Ambient awareness for agricultural robotic vehicles},
+  journal = {Biosystems Engineering},
+  year    = {2016},
+  volume  = {146},
+  pages   = {114--132},
+  doi     = {10.1016/j.biosystemseng.2015.12.010}
+}
+
+% ── Signal processing / information theory ─────────────────────────────────
+@article{Welch1967,
+  author  = {Welch, Peter D.},
+  title   = {The use of fast {F}ourier transform for the estimation of power spectra:
+             A method based on time averaging over short, modified periodograms},
+  journal = {IEEE Transactions on Audio and Electroacoustics},
+  year    = {1967},
+  volume  = {15},
+  number  = {2},
+  pages   = {70--73},
+  doi     = {10.1109/TAU.1967.1161901}
+}
+
+@book{Cover2006,
+  author    = {Cover, Thomas M. and Thomas, Joy A.},
+  title     = {Elements of Information Theory},
+  edition   = {2},
+  publisher = {Wiley-Interscience},
+  year      = {2006}
+}
+
+@inproceedings{Bao2004,
+  author    = {Bao, Ling and Intille, Stephen S.},
+  title     = {Activity recognition from user-annotated acceleration data},
+  booktitle = {Pervasive Computing},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {3001},
+  publisher = {Springer},
+  year      = {2004},
+  pages     = {1--17},
+  doi       = {10.1007/978-3-540-24646-6_1}
+}
+
+% ── Classical ML models ────────────────────────────────────────────────────
+@book{Hosmer2013,
+  author    = {Hosmer, David W. and Lemeshow, Stanley and Sturdivant, Rodney X.},
+  title     = {Applied Logistic Regression},
+  edition   = {3},
+  publisher = {Wiley},
+  year      = {2013}
+}
+
+@article{Breiman2001,
+  author  = {Breiman, Leo},
+  title   = {Random forests},
+  journal = {Machine Learning},
+  year    = {2001},
+  volume  = {45},
+  number  = {1},
+  pages   = {5--32},
+  doi     = {10.1023/A:1010933404324}
+}
+
+@article{Cortes1995,
+  author  = {Cortes, Corinna and Vapnik, Vladimir},
+  title   = {Support-vector networks},
+  journal = {Machine Learning},
+  year    = {1995},
+  volume  = {20},
+  number  = {3},
+  pages   = {273--297},
+  doi     = {10.1007/BF00994018}
+}
+
+% ── Deep learning ──────────────────────────────────────────────────────────
+@article{Hochreiter1997,
+  author  = {Hochreiter, Sepp and Schmidhuber, J{\"u}rgen},
+  title   = {Long short-term memory},
+  journal = {Neural Computation},
+  year    = {1997},
+  volume  = {9},
+  number  = {8},
+  pages   = {1735--1780},
+  doi     = {10.1162/neco.1997.9.8.1735}
+}
+
+@article{Fawaz2019,
+  author  = {Ismail Fawaz, Hassan and Forestier, Germain and Weber, Jonathan
+             and Idoumghar, Lhassane and Muller, Pierre-Alain},
+  title   = {Deep learning for time series classification: a review},
+  journal = {Data Mining and Knowledge Discovery},
+  year    = {2019},
+  volume  = {33},
+  number  = {4},
+  pages   = {917--963},
+  doi     = {10.1007/s10618-019-00619-1}
+}
+
+% ── Change-point detection ─────────────────────────────────────────────────
+@article{Page1954,
+  author  = {Page, Ewan S.},
+  title   = {Continuous inspection schemes},
+  journal = {Biometrika},
+  year    = {1954},
+  volume  = {41},
+  number  = {1/2},
+  pages   = {100--115},
+  doi     = {10.2307/2333009}
+}
+
+@article{Adams2007,
+  author  = {Adams, Ryan Prescott and MacKay, David J. C.},
+  title   = {Bayesian online changepoint detection},
+  journal = {arXiv preprint arXiv:0710.3742},
+  year    = {2007},
+  url     = {https://arxiv.org/abs/0710.3742}
+}
+
+@article{Truong2020,
+  author  = {Truong, Charles and Oudre, Laurent and Vayatis, Nicolas},
+  title   = {Selective review of offline change point detection methods},
+  journal = {Signal Processing},
+  year    = {2020},
+  volume  = {167},
+  pages   = {107299},
+  doi     = {10.1016/j.sigpro.2019.107299}
+}
 
 
 
@@ -129,24 +336,6 @@
   publisher = {IEEE}
 }
 
-% ── Optimiser ─────────────────────────────────────────────────────────────
-@article{Kingma2014,
-  author  = {Kingma, Diederik P. and Ba, Jimmy},
-  title   = {Adam: A method for stochastic optimization},
-  journal = {arXiv preprint arXiv:1412.6980},
-  year    = {2014}
-}
-
-% ── Software ──────────────────────────────────────────────────────────────
-@article{Pedregosa2011,
-  author  = {Pedregosa, Fabian and others},
-  title   = {Scikit-learn: Machine learning in {Python}},
-  journal = {Journal of Machine Learning Research},
-  year    = {2011},
-  volume  = {12},
-  pages   = {2825--2830}
-}
-
 @inproceedings{Chen2016,
   author    = {Chen, Tianqi and Guestrin, Carlos},
   title     = {{XGBoost}: A scalable tree boosting system},
@@ -166,4 +355,21 @@
 }
 
 
+% ── Optimiser ─────────────────────────────────────────────────────────────
+@article{Kingma2014,
+  author  = {Kingma, Diederik P. and Ba, Jimmy},
+  title   = {Adam: A method for stochastic optimization},
+  journal = {arXiv preprint arXiv:1412.6980},
+  year    = {2014}
+}
+
+% ── Software ──────────────────────────────────────────────────────────────
+@article{Pedregosa2011,
+  author  = {Pedregosa, Fabian and others},
+  title   = {Scikit-learn: Machine learning in {Python}},
+  journal = {Journal of Machine Learning Research},
+  year    = {2011},
+  volume  = {12},
+  pages   = {2825--2830}
+}
 

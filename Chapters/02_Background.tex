@@ -1,96 +1,160 @@
 \chapter{Background and Related Work}
 \label{ch:background}
 
+This chapter establishes the technical and historical context for the
+thesis. \Cref{sec:bg-history} surveys the development of terrain classification for mobile robots, with emphasis on proprioceptive (intrinsic) sensing. \Cref{sec:bg-proprio} examines the physical rationale for using inertial and wheel-encoder signals rather than cameras or LiDAR. \Cref{sec:bg-features-ml} reviews the windowing, feature-engineering and machine-learning techniques applied to short segments of vibration data, covering both classical hand-crafted pipelines and end-to-end deep networks. \Cref{sec:bg-vel} discusses the velocity--vibration confound that motivates the explicit speed-regime analysis carried out in \Cref{ch:results}. \Cref{sec:bg-transition} introduces statistical change-point detection on classifier posteriors, providing the background for the CUSUM-based detector developed in \Cref{sec:transition_cusum}. \Cref{sec:bg-agri} relates the project to agricultural field robotics, and \Cref{sec:bg-summary} summarises the gap that this thesis addresses.
+
 \section{Terrain Classification for Mobile Robots}
+\label{sec:bg-history}
 
-Terrain recognition has been an active research topic in mobile robotics since the
-early 2000s.
-Early work by Brooks and Iagnemma \cite{Brooks2005} demonstrated that the vibration
-spectrum recorded by an IMU mounted on a wheeled robot correlates strongly with
-surface properties such as roughness, compaction, and surface texture.
-By extracting spectral features from short time windows and feeding them to a Gaussian
-mixture model, they achieved reliable discrimination between grass, gravel, and
-concrete in outdoor settings.
+Mobile robots that operate outside structured environments must continuously adapt to the surface they are driving on. Loose soil and compacted gravel impose different rolling resistances, demand different control gains, and pose very different risks of slip or immobilisation. Recognising the terrain therefore sits at the boundary between perception and control, and has been an active research topic since the early 2000s.
 
-Subsequent work extended this paradigm in several directions.
-Vibration signals from wheel--surface interaction were used for proprioceptive terrain
-estimation on planetary rovers \cite{Weiss2011}, where cameras cannot always be
-relied on due to lighting conditions or dust.
-Several authors explored learning-based approaches — k-nearest neighbours, support
-vector machines, and random forests — as alternatives to hand-crafted GMM classifiers,
-noting that richer feature sets generally outperformed simpler spectral summaries
-\cite{Ojeda2006}.
+The first widely cited proprioceptive approach is the work of Brooks and Iagnemma~\cite{Brooks2005}, who demonstrated that the vibration spectrum recorded by an IMU on a wheeled platform encodes enough information to discriminate between common outdoor surfaces. By extracting short-time spectral features from one-second windows of vertical acceleration and feeding them to a probabilistic classifier, they distinguished gravel, grass, sand and concrete in real time. DuPont et al.~\cite{DuPont2008} refined this idea with a frequency-response approach that explicitly modelled the wheel--terrain contact as a linear vibratory system, while Iagnemma et al.~\cite{Iagnemma2004} earlier showed that online estimation of soil parameters such as cohesion and internal friction angle is feasible from the same class of signals.
 
+In planetary robotics, proprioceptive terrain classification became important for traverse planning on the Mars Exploration Rovers, where dust and shadowing limit the reliability of cameras and LiDAR~\cite{Weiss2011,Otsu2016}. A similar emphasis on intrinsic sensing is found in the slip-detection work of Ojeda et al.~\cite{Ojeda2006}, the Bayesian-filter terrain classifier of Komma and Zell~\cite{Komma2009}, and the legged-robot study of Bermudez et al.~\cite{Bermudez2012}, all of whom compared a range of supervised classifiers on multi-class outdoor terrain or surface-type datasets.
+
+Beyond these foundational studies, a steady stream of work has expanded the sensor set (encoders, motor current, suspension travel, microphones) and the classifier family ($k$-nearest neighbours, support vector machines, random forests, gradient boosting, neural networks) without substantially changing the basic formulation: slice the signal into short windows, summarise each window with a fixed-size feature vector, and train a supervised classifier. The pipeline developed in this thesis (\Cref{ch:processing,ch:feature,ch:classification}) follows the same template, with feature design and modelling choices adapted to the characteristics of a small, lightweight agricultural robot.
 
 \section{Proprioceptive Sensing for Terrain Recognition}
+\label{sec:bg-proprio}
 
-\section{Machine Learning for Time-Series Classification}
+Robotics literature distinguishes \emph{exteroceptive} sensing (cameras, LiDAR, radar, GPS), which observes the environment from a distance, from \emph{proprioceptive} or \emph{intrinsic} sensing (IMU, wheel encoders, motor current, joint torques), which observes the robot's own response to that environment. The same wheel rolling over grass and over concrete produces detectably different IMU traces because the contact mechanics differ in stiffness, damping and contact-patch geometry~\cite{Iagnemma2004,Brooks2005}.
 
-\section{Related Work}
+Several practical advantages motivate the intrinsic approach over vision-based alternatives:
+\begin{itemize}
+    \item It is invariant to lighting, fog, dust, glare and visual occlusion, all of which routinely defeat camera-based methods in outdoor and agricultural environments~\cite{Reina2016}.
+    \item It directly senses the property of interest --- the dynamic interaction between the wheel and the surface --- rather than a visual proxy such as colour or texture.
+    \item It requires no additional sensors beyond those already needed for inertial odometry and motor control, keeping the cost and power budget low.
+\end{itemize}
 
-% \section{Feature Engineering for IMU-Based Classification}
+The disadvantages are equally well documented. Proprioceptive signals are inherently local: they describe only the patch of ground currently in contact with the wheels, with no look-ahead capability. They are also strongly coupled to robot kinematics --- speed, heading, payload and suspension state all modulate the same vibration that we seek to attribute to the surface~\cite{Bermudez2012,Coyle2008}. \Cref{sec:bg-vel} returns to this confound, which is treated explicitly in the present thesis through a low-speed dataset variant.
 
-% A key insight from the literature is that raw IMU signals recorded on a moving robot
-% are non-stationary and strongly influenced by robot speed and heading.
-% Windowed feature extraction — computing statistics over short segments of fixed length
-% — provides a compact, approximately stationary representation that is well-suited to
-% standard classifiers \cite{Brooks2005, Ojeda2006}.
+A typical IMU reports three-axis linear acceleration and three-axis angular rate at around \SI{100}{\hertz} or higher. On a wheeled robot the vertical acceleration channel carries most of the terrain signature, because surface irregularities couple primarily into vertical motion through the suspension. The lateral and longitudinal channels add directional information about side-slip and traction events. Body-frame pitch and roll rates capture the pitching and rocking induced by uneven contact across the wheelbase. Yaw rate, by contrast, is dominated by steering and is therefore conventionally excluded from terrain-recognition features~\cite{Brooks2005}; this thesis follows that convention, as detailed in \Cref{ch:feature}.
 
-% Common feature groups include:
-% \begin{itemize}
-%     \item \textbf{Time-domain statistics:} mean, standard deviation, root-mean-square
-%           (RMS), peak, crest factor, skewness, kurtosis, and Hjorth parameters
-%           (activity, mobility, complexity) \cite{Hjorth1970}.
-%     \item \textbf{Frequency-domain features:} short-time Fourier transform (STFT)
-%           magnitudes, band power in physically motivated frequency bands, spectral
-%           centroid, and spectral entropy.
-%     \item \textbf{Cross-axis correlations:} linear correlations between sensor axes
-%           capture directional coupling induced by wheel--terrain contact geometry.
-% \end{itemize}
+\section{Time-Series Classification: Features and Models}
+\label{sec:bg-features-ml}
 
-% Mutual information (MI) between features and class labels is a standard tool for
-% data-driven feature selection \cite{Vergara2014}, and has been applied to IMU terrain
-% classification to reduce dimensionality without losing discriminative power.
+Raw IMU traces are non-stationary, sensor-specific and high-dimensional, so classifiers are rarely trained directly on the unprocessed samples. The classical pipeline first \emph{windows} the signal into short, overlapping segments --- typically between \SI{0.5}{\second} and \SI{4}{\second} in length~\cite{Brooks2005,Weiss2011} --- and then summarises each window with a fixed set of features that are approximately stationary within the window.
 
-% \section{Deep Learning Approaches}
+Three families of features dominate the literature:
 
-% Convolutional neural networks (CNNs) applied directly to raw or lightly pre-processed
-% time-series data have shown competitive performance for activity recognition
-% \cite{LeCun2015}, a domain closely related to terrain classification in terms of
-% signal structure.
-% One-dimensional CNNs (1D-CNNs) process multi-channel sensor windows with learned
-% convolutional filters, automatically discovering relevant patterns without manual
-% feature design \cite{Wang2017}.
-% Recurrent architectures (LSTM, GRU) have been explored for capturing longer temporal
-% dependencies across windows but tend to require more data and are harder to regularise.
+\begin{itemize}
+    \item \textbf{Time-domain statistics} include mean, standard deviation, root-mean-square (RMS), peak, range, interquartile range, skewness, kurtosis and zero-crossing rate; Hjorth~\cite{Hjorth1970} added the \emph{activity}, \emph{mobility} and \emph{complexity} parameters, which provide compact estimates of signal power, mean frequency and bandwidth without an explicit Fourier transform. 
+    
+    Concretely, for a window $x[n]$ of length $N$, let $\dot{x}[n] = x[n]-x[n-1]$ and $\ddot{x}[n] = \dot{x}[n]-\dot{x}[n-1]$ denote the first and second discrete differences. The Hjorth parameters are then defined as
+    \begin{align}
+    A(x) &= \mathrm{var}(x), \label{eq:hjorth-activity} \\
+    M(x) &= \sqrt{\frac{\mathrm{var}(\dot{x})}{\mathrm{var}(x)}}, \label{eq:hjorth-mobility} \\
+    C(x) &= \frac{M(\dot{x})}{M(x)}
+          = \sqrt{\frac{\mathrm{var}(\ddot{x})\,\mathrm{var}(x)}{\mathrm{var}(\dot{x})^{2}}},
+          \label{eq:hjorth-complexity}
+    \end{align}
+    representing signal power (activity), an estimate of mean frequency (mobility), and an estimate of bandwidth (complexity)~\cite{Hjorth1970}.
 
-% For the moderate dataset sizes typical of field robotics experiments, classical
-% methods with carefully engineered features often remain competitive with or superior
-% to deep models \cite{Weiss2011}, a finding that motivates the comparative approach
-% taken in this thesis.
+    \item \textbf{Frequency-domain features} include magnitudes of the short-time Fourier transform, power in physically motivated frequency bands --- typically \SIrange{1}{5}{\hertz} for low-frequency body modes, \SIrange{5}{20}{\hertz} for terrain texture, and \SIrange{20}{40}{\hertz} for high-frequency wheel--surface interaction --- together with spectral centroid and spectral entropy~\cite{Welch1967,Brooks2005}; jerk RMS, the root-mean-square of the first time derivative of acceleration, captures abrupt impacts and is highly discriminative between hard and compliant surfaces. 
 
-% \section{Agricultural Robotics and Terrain Awareness}
+    Letting $\hat{X}(f)$ denote the discrete Fourier transform of the windowed signal and $S_{xx}(f) = |\hat{X}(f)|^{2}/N$ its periodogram estimate of the one-sided power spectral density~\cite{Welch1967}, the power in a band $[f_{\mathrm{lo}},\,f_{\mathrm{hi}}]$ is
+    \begin{equation}
+        P_{[f_{\mathrm{lo}},\,f_{\mathrm{hi}}]}(x)
+          \;=\; \int_{f_{\mathrm{lo}}}^{f_{\mathrm{hi}}} S_{xx}(f)\,\mathrm{d}f.
+        \label{eq:band-power}
+    \end{equation}
+    The spectral centroid $f_{\mathrm{c}}$ and the (normalised) spectral entropy $H_{\mathrm{s}}$ are computed from the same periodogram as
+    \begin{equation}
+        f_{\mathrm{c}}(x) = \frac{\sum_{f>0} f\, S_{xx}(f)}{\sum_{f>0} S_{xx}(f)},
+        \qquad
+        H_{\mathrm{s}}(x) = -\sum_{f>0} p(f)\log_{2} p(f),
+        \quad p(f) = \frac{S_{xx}(f)}{\sum_{f'>0} S_{xx}(f')}.
+        \label{eq:spectral}
+    \end{equation}
+    Jerk RMS, finally, captures the rate of change of acceleration; for a sampling period $T_{s}$ it is computed as
+    \begin{equation}
+        \mathrm{JerkRMS}(x)
+          \;=\; \sqrt{\,\frac{1}{N-1}\sum_{n=1}^{N-1}\!\left(\frac{x[n]-x[n-1]}{T_{s}}\right)^{2}}.
+        \label{eq:jerk-rms}
+    \end{equation}
 
-% Agricultural robots face a specific combination of terrain challenges: loose, moisture-dependent soil, grass inter-rows, transition between compacted access paths and soft beds,
-% and surface conditions that change dramatically between dry and wet seasons
-% \cite{RoboticIntercroppingDTU2026}.
-% Few studies have specifically targeted the IMU-based terrain recognition problem in
-% an intercropping or row-crop context; most field robotics literature focuses on
-% stereo-vision or 3D LiDAR for row detection rather than proprioceptive terrain
-% estimation.
-% This thesis aims to fill a part of that gap by providing a labelled dataset and a
-% benchmarked pipeline for the intercropping scenario.
+    \item \textbf{Cross-axis and cross-sensor correlations}, finally, encode the joint linear--rotational signature of, for instance, a wheel sinking into mud or cresting a bump.
 
-% \section{Terrain Transition Detection}
+\end{itemize}
 
-% Terrain transition detection — identifying the moment a robot moves from one surface
-% to another — is distinct from steady-state classification but equally important for
-% reactive control.
-% Classifying with a short sliding window inherently provides an approximate
-% change-point detector: when the predicted label changes over consecutive windows,
-% a transition is inferred.
-% The latency and reliability of such implicit detectors depend on window length, overlap,
-% and classifier confidence.
-% \placeholder{Add 1--2 citations for explicit change-point detection methods once literature
-% search is complete (e.g.\ CUSUM, BOCD). Compare against the implicit window-based
-% approach used here.}
+The feature set grows quickly: a dozen descriptors per axis, six IMU axes plus magnitude channels, several frequency bands and a handful of correlations can easily exceed one hundred features. Information-theoretic filters~\cite{Vergara2014,Cover2006} --- most commonly mutual information between each feature and the class label --- are used to rank features by discriminative power, while Pearson correlation pruning removes the worst redundancies. The combination of mutual information ranking and correlation pruning, used in this thesis, is a standard recipe in the activity-recognition and condition-monitoring literature~\cite{Bao2004,Vergara2014}.
+
+Mutual information measures the reduction in uncertainty about the class label $Y$ given the feature $X$:
+\begin{equation}
+    I(X;Y) \;=\; \sum_{y \in \mathcal{Y}} \int_{\mathcal{X}}
+                p(x,y)\,\log\!\frac{p(x,y)}{p(x)\,p(y)}\,\mathrm{d}x
+          \;=\; H(Y) - H(Y \mid X),
+    \label{eq:mi}
+\end{equation}
+where $H(\cdot)$ denotes Shannon entropy~\cite{Cover2006}. A feature with high mutual information is informative about the terrain label irrespective of any specific classifier, which makes $I(\cdot;\cdot)$ a natural, model-agnostic ranking criterion for the feature-selection step used in this thesis.
+
+
+Once a window has been reduced to a feature vector, the classification step becomes a generic supervised learning problem. The four classical baselines used in this thesis --- logistic regression~\cite{Hosmer2013}, random forest~\cite{Breiman2001}, gradient-boosted trees (XGBoost)~\cite{Chen2016} and the support vector machine~\cite{Cortes1995} --- span the standard linear, ensemble and kernel-method axes. They were chosen because each places different priors on the data: logistic regression assumes globally linear class boundaries in feature space, the tree-based ensembles capture non-linear feature interactions and threshold effects without explicit encoding, and the RBF-kernel SVM is competitive on small-to-medium tabular problems with continuous features.
+
+Deep neural networks have transformed many time-series classification tasks since the mid-2010s~\cite{LeCun2015,Fawaz2019}. For human-activity recognition --- the closest cousin of terrain classification in terms of signal structure --- one-dimensional convolutional neural networks (1D-CNNs) operating on the raw multi-channel IMU stream routinely match or exceed hand-crafted feature pipelines~\cite{Wang2017,Fawaz2019}. Recurrent architectures (LSTM~\cite{Hochreiter1997}, GRU) and more recent attention-based variants extend the receptive field across windows but generally demand larger training datasets to regularise effectively. For terrain classification specifically, two findings recur across the literature. First, classical methods with well-designed features remain competitive with deep networks at the moderate dataset sizes typical of field-robotics experiments --- a few tens of thousands of windows rather than the millions available in benchmark datasets~\cite{Weiss2011,Otsu2016,Fawaz2019}. Second, the deep models gain the most when the input signal is rich and high-dimensional (multiple IMUs, audio or vision streams) rather than a single wheel-mounted IMU. These observations motivate the comparative design used here: the four classical baselines are benchmarked against a multilayer perceptron (MLP) trained on the engineered features and a 1D-CNN trained on raw windows of the five terrain-discriminative IMU channels, with all models evaluated under identical Leave-One-Run-Out cross-validation (\Cref{ch:classification}).
+
+\section{Velocity Dependence and Motion Confounds}
+\label{sec:bg-vel}
+
+A recurring difficulty in proprioceptive terrain classification --- and the reason for the dataset split adopted in this thesis --- is that the same features which respond to terrain also respond to robot velocity, payload and suspension dynamics~\cite{Bermudez2012,Coyle2008,Komma2009}. Driving faster over a given surface produces a higher-amplitude, broader-spectrum vibration signature; a heavier payload damps high-frequency content; a stiff versus compliant suspension shifts the resonance band. From a purely data-driven perspective, a classifier trained on logs that happen to combine smooth terrain at low speed with rough terrain at high speed can learn to discriminate the classes from speed alone, leaving the terrain information unused. Reported test accuracies in such studies are then optimistically biased.
+
+Mitigation strategies fall into three groups: (i)~\emph{conditioning on speed} by including wheel-velocity statistics as additional features and letting the model learn the joint dependence~\cite{Ojeda2006}; (ii)~\emph{normalising the features} by dividing band-power features by a velocity-dependent baseline so that residual variation can be attributed to terrain~\cite{Komma2009}; and (iii)~\emph{restricting the speed range} by training and evaluating on a subset of windows whose mean velocity falls within a narrow, physically meaningful band~\cite{Bermudez2012}.
+
+This thesis uses both approaches (i) and (iii), but for distinct reasons on the two datasets. On the \emph{farm}, the robot operates at an intrinsically low and fairly constant speed: its task is weeding and managing intruding plants between crop rows, which is mechanically incompatible with fast traversal. A low-speed, near-constant-velocity regime is therefore the natural operating point, and the farm experiments are conducted in that regime because it matches the deployment conditions, not as an artificial restriction. On the \emph{campus} development route, by contrast, both a full-speed and a low-speed subset are evaluated side by side --- not because campus deployment would ever require it, but as a controlled experiment to isolate \emph{how much} of the apparent classification accuracy is driven by speed-related vibration rather than by terrain identity, and to observe how the feature space rearranges itself when the velocity confound is removed. The results of both comparisons are reported in \Cref{ch:results}.
+
+\section{Terrain Transition and Change-Point Detection}
+\label{sec:bg-transition}
+
+A classifier that operates on a sliding window provides, at each step, a posterior distribution over the terrain classes.The simplest \emph{implicit} change-point detector takes the hard argmax of this posterior and declares a transition whenever the predicted label changes; with a smoothing rule that requires $n_{\text{stable}}$ consecutive consistent windows the detector acts as a low-pass filter on the prediction stream. This approach is widely used in practice because it requires no additional machinery, but its detection delay grows linearly with $n_{\text{stable}}$ and its false-alarm rate is hard to tune analytically.
+
+Statistical change-point detection offers a principled alternative. The cumulative-sum (CUSUM) test of Page~\cite{Page1954} accumulates a log-likelihood ratio between two candidate distributions and raises an alarm when the running sum exceeds a fixed threshold; classical analysis ties the threshold to a target average run length under the null hypothesis. Blanke et al.~\cite[\S6.4]{Blanke2003} present the bank-of-CUSUMs formulation used in the fault-detection-and-isolation literature, in which one CUSUM is maintained for each candidate post-change hypothesis and the alarm class is the argmax of the running statistics --- exactly the structure required for multiclass terrain transitions. Bayesian online change-point detection (BOCD)~\cite{Adams2007} provides a fully probabilistic alternative, with the posterior over the run length updated recursively, and the survey of Truong et al.~\cite{Truong2020} reviews these and other approaches in a unified framework.
+
+
+%TODO: Fix the formula
+Concretely, let $p_{k} \in \Delta^{C-1}$ denote the classifier's posterior over $C$ terrain classes at window index $k$, and let $c_{0}$ be the currently active class. For each candidate post-change class $c \neq c_{0}$, the per-step log-likelihood ratio is
+\begin{equation}
+    s_{c}(k) \;=\; \log \frac{p_{k}(c)}{p_{k}(c_{0})},
+    \label{eq:cusum-llr}
+\end{equation}
+and the recursive CUSUM statistic accumulates positive evidence while discarding negative drift~\cite{Page1954,Blanke2003}:
+\begin{equation}
+    g_{c}(k) \;=\; \max\!\bigl(0,\;g_{c}(k-1) + s_{c}(k)\bigr),
+    \qquad g_{c}(0) = 0.
+    \label{eq:cusum-recursion}
+\end{equation}
+An alarm is raised, and a transition to class $\hat{c}$ declared, the first time any bank statistic crosses the threshold $h$:
+\begin{equation}
+    k_{a} \;=\; \min\Bigl\{ k \,:\, \max_{c \neq c_{0}} g_{c}(k) > h \Bigr\},
+    \qquad
+    \hat{c} \;=\; \argmax_{c \neq c_{0}} g_{c}(k_{a}).
+    \label{eq:cusum-alarm}
+\end{equation}
+The threshold $h$ controls the tradeoff between mean detection delay and mean time between false alarms; classical analysis shows that the latter grows approximately as $\exp(h)$ under the null hypothesis~\cite{Page1954,Truong2020}, which lets $h$ be calibrated to a target false-alarm rate independently of the underlying classifier.
+
+
+In the proprioceptive terrain-classification literature, transition detection is most often left implicit, with only a handful of studies addressing the problem explicitly~\cite{Komma2009,Bai2019}. This thesis adopts the bank-of-CUSUMs formulation directly on the classifier's soft posterior stream, providing a detection-with-isolation procedure whose single threshold $h$ can be calibrated to a target false-alarm rate independently of the underlying classifier. The implicit ($n_{\text{stable}}$) and explicit (CUSUM) detectors are then compared on the same data in \Cref{sec:transition_cusum}.
+
+
+
+
+
+
+%TODO, a lot of these arent true
+%\section{Agricultural Field Robotics}
+%\label{sec:bg-agri}
+
+%The application context of this thesis is the DTU Robotic Intercropping project~\cite{RoboticIntercroppingDTU2026,RoboticIntercroppingProject2026}, in which a wheeled platform operates among row crops in an agricultural field. Field robotics differs from the urban-driving and planetary-rover settings that dominate the terrain-classification literature in three important respects.
+
+%First, the terrain mix is narrower but more nuanced: a typical run alternates between compacted access paths (dry or muddy), grass strips between rows, loose soil within the plot, smooth concrete approaches, and occasional cobblestone yards. Distinguishing wet from dry dirt track, or grass from loose soil, has direct consequences for traction control and for crop-safe manoeuvring, yet the visual appearance of these classes is often very similar --- which makes the proprioceptive signal especially valuable.
+
+%Second, the operating environment is highly variable across the season: moisture content, soil compaction and grass height all change between sowing and harvest. A classifier trained on data from one date may generalise poorly to another, motivating both robust feature design and the use of leakage-safe, run-level cross-validation (\Cref{ch:classification}).
+
+%Third, mainstream agricultural-robotics research has focused on exteroceptive sensing --- stereo vision, RGB-D and LiDAR --- for row detection and crop-versus-weed discrimination~\cite{Reina2016}. The proprioceptive terrain-recognition problem in an intercropping context has received comparatively little attention. This thesis aims to fill part of that gap by providing a labelled multi-run dataset from two physical sites (\Cref{ch:collection}) and a benchmarked pipeline tailored to the agricultural setting.
+
+\section{Position of this Thesis}
+\label{sec:bg-summary}
+
+The literature surveyed above establishes that (i) IMU-based proprioceptive terrain classification is a mature technique with strong empirical results on outdoor and planetary surfaces; (ii) carefully engineered features combined with classical classifiers remain competitive with deep models at moderate dataset sizes; (iii) the speed--vibration confound is a known but rarely isolated source of optimistically biased accuracy estimates; and (iv) explicit transition detection on the classifier's posterior stream is principled but under-used in this application area.
+
+Against that backdrop, this thesis makes three contributions. It produces a labelled multi-run dataset from a wheeled agricultural robot, covering up to five terrain classes across two physical sites. It conducts a controlled comparison of six classifier families --- logistic regression, random forest, gradient-boosted trees, support vector machine, multilayer perceptron and 1D convolutional neural network --- on both the full-speed and a low-speed dataset variant, quantifying the classifier-versus-speed contribution to predictive accuracy. Finally, it implements an online bank-of-CUSUMs transition detector on the soft posterior stream and evaluates it alongside the implicit sliding-window detector, with detection latency and false-alarm rate reported per terrain pair. The remainder of the report translates each of these choices into the experimental setup (\Cref{ch:setup}), data-collection campaigns (\Cref{ch:collection}), processing pipeline (\Cref{ch:processing}), feature design (\Cref{ch:feature}), classification methodology (\Cref{ch:classification}), and final results (\Cref{ch:results}).
