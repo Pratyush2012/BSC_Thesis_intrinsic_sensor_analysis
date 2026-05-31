@@ -11,7 +11,7 @@ Two outdoor recording campaigns were carried out with Ricbot during this work (\
 \toprule
 \textbf{Campaign} & \textbf{Period} & \textbf{Environment} & \textbf{Role} \\
 \midrule
-Initial Development  & Feb–Mar 2026  & Campus / urban paths & Pipeline development and cross-environment test \\
+Initial Development  & Feb–Mar 2026  & Campus / urban paths & Pipeline development; high-separability reference  \\
 Main Agricultural    & Apr 2026      & Working farm & Primary training, tuning, and evaluation \\
 \bottomrule
 \end{tabular}
@@ -95,13 +95,34 @@ Three terrain classes are considered in the primary classification problem, all 
 
 \begin{figure}[H]
     \centering
-    \placeholder{Three small panels — one representative photograph of
-    grass, dirt track, and soil from the farm site — captioned with the
-    class name.}
-    \caption{Representative photographs of the three primary terrain
-    classes.}
+    % First Panel (Grass)
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height = 5cm]{Pictures/Photos/Grass_farm.jpg}
+        \caption{Grass}
+        \label{subfig:grass}
+    \end{subfigure}
+    \hfill % Adds horizontal spacing between the images
+    % Second Panel (Dirt Track)
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height = 5cm]{Pictures/Photos/Dirt_farm.jpg}
+        \caption{Dirt Track}
+        \label{subfig:dirt}
+    \end{subfigure}
+    \hfill
+    % Third Panel (Soil)
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height = 5cm]{Pictures/Photos/Soil_farm.jpg}
+        \caption{Soil}
+        \label{subfig:soil}
+    \end{subfigure}
+    
+    \caption{Representative photographs of the three primary terrain classes.}
     \label{fig:farm_terrain_photos}
 \end{figure}
+
 
 \subsection{Extended Terrain Classes (Initial Development)}
 
@@ -126,21 +147,51 @@ The Initial Development campaign covers a wider variety of urban surfaces and is
 
 \begin{figure}[H]
     \centering
-    \placeholder{Five small panels — one representative photograph per
-    Initial Development terrain class.}
-    \caption{Representative photographs of the five Initial Development
-    terrain classes.}
+    % ROW 1
+    \begin{subfigure}[b]{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/grass_campus.jpg}
+        \caption{Grass}
+        \label{subfig:grass_campus}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/dirt_campus.jpg}
+        \caption{Dry dirt track}
+        \label{subfig:dirt_campus}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/mud_campus.jpg}
+        \caption{Muddy dirt track}
+        \label{subfig:mud_campus}
+    \end{subfigure}
+    
+    \par\bigskip % This forces the next images to a new row with nice spacing
+    
+    % ROW 2
+    \begin{subfigure}[b]{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/cobblestone_campus.jpg}
+        \caption{Cobblestone track}
+        \label{subfig:cobblestone_campus}
+    \end{subfigure}
+    \qquad % Adds a wider horizontal gap to keep the bottom two centered/spaced nicely
+    \begin{subfigure}[b]{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/road_campus.jpg}
+        \caption{Smooth terrain (Asphalt road)}
+        \label{subfig:road_campus}
+    \end{subfigure}
+    
+    \caption{Representative photographs of the five Initial Development terrain classes.}
     \label{fig:main_terrain_photos}
 \end{figure}
 
-\placeholder{Decide whether to keep the Initial Development 5-class
-breakdown as-is when comparing against the Farm-trained models, or to
-collapse it into a 3-class scheme (\emph{smooth}, \emph{grass},
-\emph{rough}) so that the Initial Development data can be evaluated
-directly against models trained on the Farm 3-class scheme. The
-\texttt{*\_3class} notebooks (07a / 07b / 08b / 09b / 10b) suggest the
-latter; if you commit to that, add a short paragraph here explaining
-the merge and the reasoning.}
+\newpage
+For the comparison against the Farm-trained models, the Initial Development data is restricted to a three-class subset containing \texttt{smooth\_terrain}, \texttt{grass}, and \texttt{dry\_dirt\_track}; \texttt{muddy\_dirt\_track} and \texttt{cobblestone} are dropped. This matches the class cardinality of the Main Agricultural dataset ($K = 3$) so that the two classification problems share an identical chance-level baseline and can be compared at the level of macro-F1 without the confound that a five-class problem is intrinsically harder than a three-class one. The two dropped classes are also the weakest candidates for retention: \texttt{cobblestone} has no analogue at the agricultural site, and \texttt{muddy\_dirt\_track} was recorded under transient weather conditions that conflate surface composition with moisture state and yields the smallest sample count after windowing. The retained three labels span the same or a close coarse roughness spectrum (smooth, vegetated, unpaved compacted) that the Farm \texttt{grass}\,/\,\texttt{dirt\_track}\,/\,\texttt{soil} scheme covers, so the two parallel three-class problems are discussed side-by-side in \Cref{ch:results} as comparable-difficulty reference points rather than as a strict train-on-campus / test-on-farm transfer task. All notebooks suffixed with \texttt{\_3class} (\texttt{07a}\,/\,\texttt{07b}\,/\,\texttt{08b}\,/\,\texttt{09b}\,/\,\texttt{10b}) operate exclusively on this reduced subset.
 
 \subsection{Labelling Procedure}
 

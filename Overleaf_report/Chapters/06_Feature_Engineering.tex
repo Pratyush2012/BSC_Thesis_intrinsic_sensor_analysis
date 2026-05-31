@@ -1,8 +1,233 @@
 \chapter{Feature Engineering}
 \label{ch:feature}
 
+The windowed dataset produced in \Cref{ch:processing} consists of \SI{2}{\second} segments of synchronised, filtered IMU and odometry samples. Before any classifier can be trained, each window must be summarised by a fixed-length feature vector that is approximately stationary within the window and informative about the underlying terrain. This chapter describes the feature design adopted in this thesis, the two speed-regime dataset variants derived from the resulting feature table, and the data-driven feature-selection procedure used to control dimensionality before modelling. All feature logic lives in the reusable module \texttt{src/features.py} and is invoked from \texttt{06\_features.ipynb} (5-class campus and full 3-class farm extraction) and \texttt{06b\_features\_dataset\_B\_3class.ipynb} (read-only re-analysis on the modelling subset). The theoretical motivation for each feature group --- and the definitions of Hjorth, band-power, spectral and mutual-information quantities --- was given in \Cref{sec:bg-features-ml}; this chapter focuses on the concrete implementation choices.
+
+\paragraph{Channels feature-extracted.}
+Five raw IMU channels are used: the three accelerometer axes $(a_x, a_y, a_z)$ and two gyroscope axes $(g_x, g_z)$. The yaw rate $g_y$ is excluded throughout, as discussed in \Cref{sec:bg-proprio} and motivated again in \Cref{ch:setup}: yaw is dominated by intentional steering rather than terrain-induced motion, and including it would let a classifier learn route-specific cues. In addition, two derived \emph{magnitude} channels are computed per window,
+\begin{equation}
+    \lVert \mathbf{a}\rVert(n)  = \sqrt{a_x^2(n) + a_y^2(n) + a_z^2(n)},
+    \qquad
+    \lVert \mathbf{g}\rVert(n)  = \sqrt{g_x^2(n) + g_z^2(n)},
+    \label{eq:magnitudes}
+\end{equation}
+which capture overall vibration intensity in an orientation-agnostic form. The accelerometer magnitude is computed \emph{after} per-window mean removal on each axis: the per-window mean of $a_y$ contains the $\approx{-1}\,g$ gravity component plus any residual DC bias, and subtracting it leaves only dynamic, terrain-driven acceleration. This DC removal step is the same one used downstream in the per-axis time-domain features.
+
+\paragraph{Feature groups.}
+For each of the seven channels above (five raw IMU + two magnitudes) the same suite of time-domain (\Cref{sec:feat_time}) and frequency-domain (\Cref{sec:feat_freq}) descriptors is computed, together with three within-sensor and four cross-sensor correlations that are not per-channel. Three odometry features summarise the wheel-speed signal within the window. The full feature vector contains $189$ entries; the precise count includes a handful of optional speed-normalised energy features, and is reduced substantially by the selection step described in \Cref{sec:feat_selection}.
+
+\begin{figure}[H]
+    \centering
+    \placeholder{A simple block diagram of the feature-engineering
+    pipeline: windowed signals $\to$ per-channel time + frequency
+    features $\to$ magnitudes $\to$ cross-axis correlations $\to$
+    odometry features $\to$ raw feature table $\to$
+    log-transform $\to$ Dataset A / Dataset B split $\to$ MI ranking +
+    correlation pruning $\to$ final feature table.
+    A TikZ flow-chart reads more cleanly than a screenshot.}
+    \caption{Feature-engineering pipeline from windowed signals to the
+    pruned, model-ready feature table.}
+    \label{fig:feature_pipeline}
+\end{figure}
+
 \section{Time-Domain Features}
+\label{sec:feat_time}
+
+Each of the seven channels $x[n]$ defined in the previous paragraph is passed through the same time-domain feature extractor. Three families of descriptors are computed.
+
+\subsection{Statistical Moments and Shape Descriptors}
+
+The first family captures the marginal distribution of the windowed signal: mean, standard deviation, minimum, maximum, range, median, interquartile range, skewness $\gamma_1$, kurtosis $\gamma_2$ and mean absolute value. Skewness and kurtosis are computed in their unbiased forms
+\begin{equation}
+    \gamma_1 = \frac{N^{2}}{(N-1)(N-2)}\,\frac{m_3}{m_2^{3/2}},
+    \qquad
+    \gamma_2 = \frac{N(N+1)}{(N-1)(N-2)(N-3)}\,\frac{m_4}{m_2^{2}} - \frac{3(N-1)^{2}}{(N-2)(N-3)},
+    \label{eq:skew_kurt}
+\end{equation}
+where $m_k = \tfrac{1}{N}\sum_n (x[n]-\bar x)^{k}$ is the central moment of order $k$. These two shape descriptors are particularly useful on cobblestone and dirt-track surfaces, whose impulsive vibration generates heavy-tailed (high-kurtosis) per-window distributions, distinguishing them from smoother surfaces where the per-window distribution is closer to Gaussian.
+
+\subsection{Energy and Crossing-Rate Features}
+
+The second family captures signal energy and zero-crossing behaviour: root-mean-square (RMS), total energy, and zero-crossing rate. The first two are
+\begin{equation}
+    \mathrm{RMS}(x) = \sqrt{\frac{1}{N}\sum_{n=0}^{N-1} x^{2}[n]},
+    \qquad
+    E(x) = \sum_{n=0}^{N-1} x^{2}[n],
+    \label{eq:rms_energy}
+\end{equation}
+and the zero-crossing rate (ZCR) counts sign changes between adjacent samples and normalises by $N-1$:
+\begin{equation}
+    \mathrm{ZCR}(x) = \frac{1}{N-1}\sum_{n=1}^{N-1} \mathbb{1}\bigl\{x[n]\,x[n-1] < 0\bigr\}.
+    \label{eq:zcr}
+\end{equation}
+Acceleration RMS in particular is one of the most reliably discriminative single features in the IMU terrain-classification literature~\cite{Brooks2005,Weiss2011}.
+
+\subsection{Hjorth Parameters and Jerk}
+
+The third family captures dynamic, derivative-based properties of the signal. Hjorth's \emph{activity}, \emph{mobility} and \emph{complexity} parameters (\Cref{eq:hjorth-activity,eq:hjorth-mobility,eq:hjorth-complexity}) are computed directly from the per-window discrete differences, giving compact estimates of signal power, mean frequency and bandwidth without an explicit Fourier transform~\cite{Hjorth1970}. Jerk RMS, the root-mean-square of the first time derivative of the acceleration (\Cref{eq:jerk-rms}), measures the rate of change of acceleration within the window and is highly discriminative between hard, impulsive surfaces (high jerk) and compliant ones (low jerk). On the gyroscope channels, $\mathrm{JerkRMS}(g_x)$ and $\mathrm{JerkRMS}(g_z)$ effectively capture the impulsiveness of pitch and roll responses, which differ markedly between, for example, a smooth tarmac surface and an irregular cobblestone yard.
+
+\subsection{Within- and Cross-Sensor Correlations}
+
+In addition to the per-channel features above, eight Pearson correlations are computed once per window. Three of them are \emph{within-sensor} correlations on the accelerometer (lateral and vertical, lateral and longitudinal, vertical and longitudinal) and one is on the gyroscope (pitch and roll). The remaining four are \emph{cross-sensor} correlations that encode the joint linear and rotational signature of wheel--terrain interaction:
+\begin{equation}
+    \rho_{a_y,\,g_x},\quad
+    \rho_{a_y,\,g_z},\quad
+    \rho_{a_z,\,g_x},\quad
+    \rho_{a_x,\,g_z}.
+    \label{eq:cross_corrs}
+\end{equation}
+Each pair has a direct physical interpretation: $\rho_{a_y,g_x}$ captures vertical bounce coupled with pitch (e.g.\ a wheel cresting a bump), $\rho_{a_y,g_z}$ captures vertical bounce coupled with roll (uneven left-right wheel sinkage, as on muddy ruts), and so on. These cross-sensor correlations are one of the few features in the suite that the per-channel pipeline cannot recover, and they remain informative in the dataset-A mutual-information rankings (\Cref{sec:feat_selection}).
 
 \section{Frequency-Domain Features}
+\label{sec:feat_freq}
+
+The same seven channels are transformed into the frequency domain via the discrete Fourier transform (DFT) for the second family of features. Each centred window $\tilde x[n] = x[n] - \bar x$ is converted to a one-sided periodogram estimate of the power spectral density (PSD),
+\begin{equation}
+    S_{xx}(f_k) = \frac{1}{N}\,|\hat{X}(f_k)|^{2},
+    \qquad
+    \hat{X}(f_k) = \sum_{n=0}^{N-1} \tilde x[n]\,e^{-j 2\pi k n / N},
+    \label{eq:psd}
+\end{equation}
+with $f_k = k\,f_s / N$ for $k = 0, 1, \dots, N/2$. At the chosen window length and sample rate ($W = \SI{2}{\second}$, $f_s = \SI{100}{\hertz}$, $N=200$), the frequency resolution is $\Delta f = f_s/N = \SI{0.5}{\hertz}$ and the Nyquist limit is \SI{50}{\hertz}.
+
+\subsection{Spectral Summary Statistics}
+
+Four scalar summaries are computed from the PSD: total spectral energy, dominant frequency, spectral centroid and spectral entropy. The spectral centroid and entropy are defined in \Cref{eq:spectral} (\Cref{sec:bg-features-ml}); the dominant frequency is simply $f_{\mathrm{dom}}(x) = \arg\max_{k>0} S_{xx}(f_k)$, and the spectral energy is $E_s(x) = \sum_{k} S_{xx}(f_k)$. The centroid is a robust summary of where the signal's power lies on the frequency axis, while spectral entropy quantifies how peaked or broadband the spectrum is; loose tilled soil tends to produce a low spectral centroid with low entropy, whereas cobblestone produces a broadband, high-entropy signature.
+
+\subsection{Physically Motivated Band Power}
+
+To localise spectral information in physically meaningful regions, the power in four pre-defined frequency bands is integrated using \Cref{eq:band-power} (\Cref{sec:bg-features-ml}):
+
+\begin{itemize}
+    \item \SIrange{1}{5}{\hertz} --- macro terrain shape and low-speed bumps.
+    \item \SIrange{5}{20}{\hertz} --- terrain texture, the most discriminative band on the farm dataset.
+    \item \SIrange{20}{40}{\hertz} --- high-frequency wheel--surface interaction.
+    \item \SIrange{40}{80}{\hertz} --- slip events and hard-surface ringing.
+\end{itemize}
+
+The last two bands are computed for completeness and to preserve flexibility for future experiments at higher sample rates, but their content is substantially attenuated in the present pipeline. The \SI{20}{\hertz}, second-order Butterworth zero-phase filter applied in \Cref{sec:filtering} reduces the \SIrange{20}{40}{\hertz} band-power to roughly $4\%$ of the \SIrange{5}{20}{\hertz} band-power on the same channel --- for example, on $a_y$ the median band-power drops from $1.5 \times 10^{-1}$ in \SIrange{5}{20}{\hertz} to $6.0 \times 10^{-3}$ in \SIrange{20}{40}{\hertz} --- and the \SIrange{40}{80}{\hertz} band lies almost entirely above the Nyquist limit $f_s/2 = \SI{50}{\hertz}$ and is dominated by interpolation/round-off noise (median $\sim 7 \times 10^{-5}$ on $a_y$, four orders of magnitude below the discriminative \SIrange{5}{20}{\hertz} band). These low-energy features are retained in the raw feature table for diagnostic completeness but are consistently dropped by the mutual-information ranking (\Cref{sec:feat_selection}); no feature in either band appears in the top-25 MI lists for either dataset.
+
+\subsection{Log Transform for Heavy-Tailed Features}
+
+Several frequency-domain features --- band-power in particular --- are strictly non-negative and exhibit heavy right tails across the dataset, because rare impulsive events (a single bump on an otherwise smooth surface) produce per-window values orders of magnitude above the median. For these features the model-agnostic transformation
+\begin{equation}
+    x \;\mapsto\; \log(1 + x)
+    \label{eq:log1p}
+\end{equation}
+is applied before any downstream processing. The transform is monotonic and well-defined for $x \ge 0$; it compresses the heavy upper tail while leaving small values essentially unchanged, which makes the resulting distributions closer to symmetric and reduces the leverage that single outlier windows have on distance-based and gradient-based learners. The columns to which the log transform is applied are listed in \texttt{LOG\_TRANSFORM\_CANDIDATES} in \texttt{src/features.py} and include the band-power and energy features on every channel.
 
 \section{Feature Selection}
+\label{sec:feat_selection}
+
+The full feature table generated above contains $189$ columns and is heavily redundant: many features are mathematically related (e.g.\ energy and RMS differ only by a factor of $N$) or empirically correlated (e.g.\ \SIrange{5}{20}{\hertz} band-power on $a_y$ and on $\lVert\mathbf{a}\rVert$). Two reduction steps are applied before modelling: a velocity-regime dataset split (\Cref{sec:feat_dataset_AB}) and a combined mutual-information ranking with correlation pruning (\Cref{sec:feat_mi_pruning}). In the final modelling stage (\Cref{ch:classification}) a further \emph{fold-local} mutual-information selection is performed inside the cross-validation loop to prevent any selection-stage leakage; the global ranking described here is used for exploratory analysis and to fix the top-$N$ feature shortlist that is reported in this report.
+
+\subsection{Velocity-Regime Dataset Split: A vs.\ B}
+\label{sec:feat_dataset_AB}
+
+As motivated in \Cref{sec:bg-vel}, the same vibration features that respond to terrain also respond to the robot's forward speed. To allow the contribution of speed to be quantified, two dataset variants are constructed from the same feature table:
+\begin{itemize}
+    \item \textbf{Dataset~A} --- all windows in the feature table, covering the full recorded speed range.
+    \item \textbf{Dataset~B} --- a low-speed, near-constant-velocity subset selected by the joint criterion
+          \begin{equation}
+              \mathrm{speed}_{\mathrm{mean}}(w) < v_{\mathrm{thresh}}
+              \;\;\land\;\;
+              \mathrm{speed}_{\mathrm{std}}(w) < \sigma_{\mathrm{thresh}},
+              \label{eq:dataset_B_mask}
+          \end{equation}
+          with $v_{\mathrm{thresh}} = \SI{0.6}{\meter\per\second}$ and $\sigma_{\mathrm{thresh}} = \SI{0.10}{\meter\per\second}$.
+\end{itemize}
+On the farm logs the robot is operated at an intrinsically low, roughly constant speed (\Cref{sec:bg-vel}), so essentially all farm windows already satisfy \Cref{eq:dataset_B_mask}; the two farm datasets are therefore nearly identical and a single feature table is used for farm modelling. On the campus logs, where the speed was deliberately allowed to vary, the split removes the high-speed and accelerating windows and isolates the residual signal that is genuinely attributable to surface type rather than to operator-driven motion.
+
+\begin{figure}[H]
+    \centering
+    \placeholder{Two side-by-side bar charts of per-class window counts
+    for the campus dataset: full speed (Dataset A) and low constant
+    speed (Dataset B). Suggested artefacts:
+    \texttt{Report diagrams/Low amount of muddy window overall.png}
+    (Dataset A) and
+    \texttt{Report diagrams/Low amount of muddy window for constant low speed.png}
+    (Dataset B). These illustrate the residual class imbalance,
+    especially for \texttt{muddy\_dirt\_track}, after the speed
+    filter is applied.}
+    \caption{Per-class window counts for the campus dataset before
+    (Dataset A) and after (Dataset B) the low-constant-speed filter
+    is applied.}
+    \label{fig:dataset_AB_counts}
+\end{figure}
+
+\subsection{Mutual-Information Ranking and Correlation Pruning}
+\label{sec:feat_mi_pruning}
+
+To rank the surviving features by their relevance to the terrain label, mutual information is computed between every feature column and the class label using a $k$-nearest-neighbour estimator ($k = 5$)~\cite{Kraskov2004}. For Dataset~B the MI ranking is reported separately for two feature subsets: the full feature table, and the table with the four explicit odometry/speed columns (\texttt{odom\_mean\_speed}, \texttt{odom\_speed\_std}, \texttt{odom\_distance}, \texttt{net\_speed}) removed. The second variant is used as the primary EDA ranking because the speed columns are already implicitly constrained by Dataset~B's construction (\Cref{eq:dataset_B_mask}), so retaining them would inflate the MI of features whose information overlaps with the already-constrained speed axis.
+
+The top features by mutual information are dominated by the gyroscope pitch and roll channels and the vertical accelerometer across both datasets. The five highest-ranking features in the farm dataset (no-speed variant) are \texttt{gx\_hjorth\_complexity}, \texttt{gx\_bandpower\_5\_20Hz}, \texttt{gz\_hjorth\_mobility}, \texttt{gz\_spectral\_centroid} and \texttt{ay\_bandpower\_5\_20Hz}, which together combine dynamical, frequency-band and spectral-shape summaries of the three channels most directly excited by surface roughness: pitch ($g_x$), roll ($g_z$) and vertical acceleration ($a_y$) (\Cref{fig:mi_bar}). On the campus dataset the leading features shift slightly to emphasise accelerometer-magnitude energy (\texttt{acc\_mag\_rms}, \texttt{acc\_mag\_energy}, \texttt{acc\_mag\_median}) alongside the same gyro-roll spectral features, reflecting the broader range of surface stiffnesses present on the campus route (cobblestone and smooth tarmac in addition to grass and dirt). In both cases the dominance of pitch/roll and vertical-acceleration features is consistent with the physical picture of an agricultural-style robot whose terrain signature is carried mainly by chassis rocking and vertical bounce rather than by longitudinal/lateral load transfer.
+
+\begin{figure}[H]
+    \centering
+    \placeholder{Insert
+    \texttt{reports/features/Farm/dataset\_B/mutual\_information.png}.
+    Shows the top 30 features ranked by mutual information against
+    the terrain label on the farm dataset (no-speed variant).}
+    \caption{Top-30 features ranked by mutual information with the
+    terrain label on the farm dataset (no-speed variant).
+    Gyroscope pitch and roll dynamical and frequency-band statistics,
+    together with vertical-accelerometer band-power, dominate the
+    leading ranks.}
+    \label{fig:mi_bar}
+\end{figure}
+
+\paragraph{Correlation pruning.}
+The MI ranking flags relevant features but does not penalise redundancy: two highly correlated features can both rank high without either adding information beyond what the other already carries. A second pass therefore removes one feature from each pair whose absolute Pearson correlation exceeds the threshold $\rho_{\max} = 0.95$, keeping the feature with the higher variance:
+\begin{equation}
+    \mathcal{D} \;=\; \bigl\{
+        j : \exists\, i \neq j \text{ with }
+        |\mathrm{corr}(x_i, x_j)| > \rho_{\max}
+        \text{ and } \mathrm{var}(x_j) \le \mathrm{var}(x_i)
+    \bigr\}.
+    \label{eq:corr_pruning}
+\end{equation}
+The threshold $\rho_{\max} = 0.95$ is conservative: it removes only features that are very nearly co-linear with another feature, so the resulting pruned table preserves all genuinely independent information. Speed columns are excluded from the aggressive pruning step and kept in the table for downstream diagnostics, since dropping them would make the speed-regime ablation in \Cref{sec:bg-vel} hard to perform post-hoc. The combined MI-then-correlation procedure is the standard recipe in the activity-recognition and condition-monitoring literature~\cite{Vergara2014,Bao2004} and is also used --- at a fold-local level --- inside the classification cross-validation loop in \Cref{ch:classification}.
+
+\begin{figure}[H]
+    \centering
+    \placeholder{Insert
+    \texttt{reports/features/Farm/dataset\_B/corr\_heatmap.png}.
+    Pearson correlation heatmap of the top-25 most variable features
+    after pruning.}
+    \caption{Pearson correlation heatmap of the top-25 most variable
+    features in the farm dataset after MI ranking and correlation
+    pruning.}
+    \label{fig:corr_heatmap}
+\end{figure}
+
+\subsection{Sanity Check: Low-Dimensional Embeddings}
+
+To verify that the engineered features carry discriminative information beyond what is visible in any single column, the pruned farm Dataset is projected into two dimensions using principal-component analysis (PCA) and t-distributed stochastic neighbour embedding (t-SNE)~\cite{vanderMaaten2008}. Both projections are computed on the standardised feature table; the t-SNE projection is computed on a stratified subsample (capped at $2{,}500$ rows) to keep the computation tractable while preserving class proportions.
+
+\begin{figure}[H]
+    \centering
+    \placeholder{Two side-by-side panels:
+    (a) \texttt{reports/features/Farm/dataset\_B/pca\_2d.png},
+    (b) \texttt{reports/features/Farm/dataset\_B/tsne\_2d.png}.
+    Both should be colour-coded by terrain class.}
+    \caption{Low-dimensional embeddings of the pruned farm feature
+    table, coloured by terrain class. PCA (left) shows overall
+    global structure; t-SNE (right) reveals finer class clustering.
+    Both projections are computed on standardised features.}
+    \label{fig:embeddings}
+\end{figure}
+
+PCA captures only a small fraction of the total variance in its first two components but already separates the broad outline of the classes; t-SNE produces much tighter per-class clusters and confirms that the pruned feature table is well-separated in a non-linear sense. The detailed class-by-class separability and the implications for the choice of classifier family are taken up in \Cref{ch:results}.
+
+\subsection{Output of the Feature Stage}
+
+The chapter's pipeline produces, for each of the campus and farm campaigns, the following artefacts:
+\begin{itemize}
+    \item \texttt{data/processed/window\_features.csv} --- the full per-window feature table before any selection.
+    \item \texttt{data/processed/dataset\_A\_features.csv} and \texttt{dataset\_A\_pruned.csv} --- the full-speed dataset and its correlation-pruned counterpart.
+    \item \texttt{data/processed/dataset\_B\_features.csv} and \texttt{dataset\_B\_pruned.csv} --- the low-constant-speed dataset and its correlation-pruned counterpart.
+    \item \texttt{data/processed/top\_mi\_features.json} (campus 5-class) and \texttt{top\_mi\_features\_dataset\_B\_3class.json} (campus 3-class merged) --- top-$N$ features by mutual information for the two campus modelling problems. The corresponding farm top-$N$ list is exported during notebook 06 to \texttt{data/processed/Farm/top\_mi\_features.json}.
+\end{itemize}
+These tables, together with the windowed raw signals stored in \texttt{data/processed/raw\_windows\_cnn.parquet}, form the input to the classifier benchmark in \Cref{ch:classification}.
+
+%NEED TO CHECK IF THE DIRECTORIES ARE CORRECT; AND IN THE FUTURE IF SOME OF THEM ARE MOVED IN THE CODE THEY NEED TO BE UPDATED.

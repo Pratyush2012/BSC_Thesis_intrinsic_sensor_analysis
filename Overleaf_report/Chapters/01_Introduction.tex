@@ -5,7 +5,7 @@
 
 Robotic intercropping is an emerging agricultural strategy that uses autonomous robots to cultivate multiple crop species in the same field. Field conditions constantly change and a robot that treats the environment as constant can lead to poor navigation, unnecessary stops, or damage to plants. \cite{RoboticIntercroppingProject2026} Therefore, this project aims to equip the robot with the ability to recognize the type of terrain that it experiences while driving, using only the available intrinsic motion sensors. Specifically, accelerometer and gyroscope measurements, together with wheel odometry, are used to capture vibration patterns, impacts, and motion signatures arising from robot–terrain interaction, including transitions between surface types.
 
-The study considers two complementary terrain scenarios. Before the main data collection, a campus route covering asphalt, grass, cobblestone, and a dirt track served as the development environment to build and test the full processing pipeline. he campus route was chosen to mimic different terrains found on the farm, while also including classes that provide an interesting contrast from the others — such as smooth asphalt roads and cobblestones. The clear distinction between asphalt and the softer surfaces also provides a useful reference point for comparison with the primary scenario: an actual farm, where grass, compacted soil, and rough dirt tracks present a harder classification problem due to their greater similarity. Data were collected across multiple repeated runs on each route — four campus runs on separate days and five farm runs across two days — to assess cross-run generalisation. The effect of driving speed was also explicitly investigated by evaluating models on both the full recorded speed range and a lower, more consistent speed regime, with the latter strategy adopted during the main farm data collection. The collected data were labelled by terrain segment, and the project developed and evaluated methods ranging from classical machine learning baselines to a convolutional neural network, also examining transition detection as a harder sub-problem.
+The study considers two complementary terrain scenarios. Before the main data collection, a campus route covering smooth pavement, grass, cobblestone, and a dirt track that was recorded under both dry and wet/muddy conditions served as the development environment to build and test the full processing pipeline. The campus route was chosen to mimic different terrains found on the farm, while also including classes that provide an interesting contrast from the others — such as smooth asphalt roads and cobblestones. The clear distinction between asphalt and the softer surfaces also provides a useful reference point for comparison with the primary scenario: an actual farm, where grass, soil, and rough dirt tracks present a harder classification problem due to their greater similarity. Data were collected across multiple repeated runs on each route — four campus runs on separate days and five farm runs across two days — to assess cross-run generalisation. The effect of driving speed was also explicitly investigated by evaluating models on both the full recorded speed range and a lower, more consistent speed regime, with the latter strategy adopted during the main farm data collection. The collected data were labelled by terrain segment, and the project developed and evaluated methods ranging from classical machine learning baselines to a convolutional neural network, also examining transition detection as a harder sub-problem.
 
 Overall, the project does not rely on external perception sensors such as cameras or LiDAR, but instead investigates the limits of proprioceptive terrain recognition. The goal is not to replace exteroceptive sensing, but to explore how intrinsic motion signals can complement it, providing a lightweight, always-available channel for terrain awareness that does not depend on lighting conditions, sensor range, or additional hardware.
 
@@ -59,7 +59,7 @@ Answering this question requires addressing several sub-problems:
     \item Building a reproducible preprocessing and feature engineering pipeline that converts raw sensor logs into model-ready feature vectors.
     \item Training and comparing multiple classifier families, from classical machine learning baselines to a convolutional neural network, under a Leave-One-Run-Out cross-validation scheme that prevents data leakage between robot runs.
     \item Assessing how driving speed affects classification by evaluating each model on both the full recorded speed range and a lower, more consistent speed regime.
-    \item Comparing performance between the campus development scenario, where terrain classes are relatively distinct, and the farm scenario, where surfaces (grass, compacted soil, rough dirt tracks) are more similar and therefore harder to separate, to characterise how terrain similarity affects achievable accuracy with the same pipeline.
+    \item Comparing performance between the campus development scenario, where terrain classes are relatively distinct, and the farm scenario, where surfaces (grass, loose tilled soil, compacted dirt tracks) are more similar and therefore harder to separate, to characterise how terrain similarity affects achievable accuracy with the same pipeline.
     \item Examining transition detection, identifying the boundary between two adjacent terrain segments, as a harder sub-problem than steady-state classification.
 \end{enumerate}
 
@@ -94,11 +94,97 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
           review, revisions, and submission on 10 June 2026.
 \end{itemize}
 
+
+\definecolor{phase0}{RGB}{80, 80, 80}
+\definecolor{phase1}{RGB}{120, 120, 120}
+\definecolor{phase2}{RGB}{0, 102, 204}
+\definecolor{phase3}{RGB}{0, 153, 153}
+\definecolor{phase4}{RGB}{204, 102, 0}
+\definecolor{phase5}{RGB}{153, 0, 0}
 \begin{figure}[htbp]
     \centering
     \makebox[\textwidth][c]{%
     \resizebox{1.3\textwidth}{!}{%
-    % --- paste the existing ganttchart environment here unchanged ---
+    \begin{ganttchart}[
+        canvas/.style={draw=black!25, line width=.6pt},
+        hgrid style/.style={draw=black!25, line width=.6pt},
+        vgrid={*1{draw=black!5, line width=.6pt}},
+        title/.style={draw=black!25, fill=none},
+        title label font=\bfseries\normalsize,
+        include title in canvas=false,
+        bar/.append style={draw=none},
+        bar height=.6,
+        y unit title=1.2cm,
+        y unit chart=1.1cm,
+        bar label font=\normalsize\color{black!80},
+        bar label node/.append style={align=right, text width=6cm},
+        group label font=\normalsize\bfseries\color{black!85},
+        group label node/.append style={align=right, text width=6cm},
+        progress label text={},
+        group right shift=0,
+        group top shift=.6,
+        group height=.3,
+        x unit=0.34cm,
+        time slot format=isodate,
+        calendar week text={W\currentweek},
+        link/.style={-stealth, draw=black!45, rounded corners=2pt}
+    ]{2026-02-02}{2026-06-12}
+
+        \gantttitlecalendar{month=name, week=1} \\
+
+        % PHASE 0
+        \ganttgroup[group/.append style={fill=phase0}]{Phase 0: Project Management}{2026-02-02}{2026-02-14} \\
+        \ganttbar[bar/.append style={fill=phase0}, progress=100, name=P0A]{Research Questions \& Metrics}{2026-02-02}{2026-02-07} \\
+        \ganttbar[bar/.append style={fill=phase0}, progress=100, name=P0B]{Risk Assessment \& Project Plan}{2026-02-08}{2026-02-14} \\
+
+        % PHASE 1
+        \ganttgroup[group/.append style={fill=phase1}]{Phase 1: Data Foundation}{2026-02-15}{2026-02-28} \\
+        \ganttbar[bar/.append style={fill=phase1}, progress=100, name=P1A]{Pipeline \& QC Framework}{2026-02-15}{2026-02-21} \\
+        \ganttbar[bar/.append style={fill=phase1}, progress=100, name=P1B]{Labelling System (Provisional)}{2026-02-22}{2026-02-28} \\
+
+        % PHASE 2
+        \ganttgroup[group/.append style={fill=phase2}]{Phase 2: Proxy Data \& Preprocessing}{2026-02-15}{2026-03-21} \\
+        \ganttbar[bar/.append style={fill=phase2}, name=P2A]{Proxy Data Collection (Indoor)}{2026-02-15}{2026-03-07} \\
+        \ganttbar[bar/.append style={fill=phase2}, name=P2C]{Sync, Resample \& Windowing}{2026-03-08}{2026-03-14} \\
+        \ganttbar[bar/.append style={fill=phase2}, name=P2D]{Feature Engineering Foundation}{2026-03-15}{2026-03-21} \\
+        \ganttmilestone[milestone/.append style={fill=phase2}, name=MS1]{Proxy Dataset Freeze}{2026-03-21} \\
+
+        % PHASE 3
+        \ganttgroup[group/.append style={fill=phase3}]{Phase 3: Modelling \& Evaluation}{2026-03-22}{2026-04-25} \\
+        \ganttbar[bar/.append style={fill=phase3}, name=P3A]{Baseline Models (RF/XGB/LR)}{2026-03-22}{2026-03-28} \\
+        \ganttbar[bar/.append style={fill=phase3}, name=P3B]{Neural Network (MLP/1D-CNN)}{2026-03-29}{2026-04-04} \\
+        \ganttbar[bar/.append style={fill=phase3}, name=P3C]{Field Data Collection (Outdoor)}{2026-04-05}{2026-04-11} \\
+        \ganttbar[bar/.append style={fill=phase3}]{Field Data Collection (If more data is required -  Optional)}{2026-04-19}{2026-04-25} \\
+        \ganttbar[bar/.append style={fill=phase3}, name=P3D]{Domain Transfer \& Evaluation}{2026-04-12}{2026-04-18} \\
+        \ganttmilestone[milestone/.append style={fill=phase3}, name=MS2]{Final Model Selection}{2026-04-18} \\
+
+        % PHASE 4
+        \ganttgroup[group/.append style={fill=phase4}]{Phase 4: Validation \& Documentation}{2026-04-19}{2026-05-16} \\
+        \ganttbar[bar/.append style={fill=phase4}, name=P4A]{Robustness \& Noise Tests}{2026-04-19}{2026-05-02} \\
+        \ganttbar[bar/.append style={fill=phase4}, name=P4B]{Methodology \& Results Sprint}{2026-05-03}{2026-05-16} \\
+
+        % PHASE 5
+        \ganttgroup[group/.append style={fill=phase5}]{Phase 5: Finalisation}{2026-05-17}{2026-06-10} \\
+        \ganttbar[bar/.append style={fill=phase5}, name=P5A]{Lit Review \& Conclusions}{2026-05-17}{2026-05-30} \\
+        \ganttbar[bar/.append style={fill=phase5}, name=P5B]{Final Revisions \& Submission}{2026-05-31}{2026-06-09} \\
+        \ganttmilestone[milestone/.append style={fill=phase5}, name=MS3]{FINAL SUBMISSION}{2026-06-10}
+
+        % Links
+        \ganttlink{P0A}{P0B}
+        \ganttlink{P0B}{P1A}
+        \ganttlink{P1A}{P1B}
+        \ganttlink{P2A}{P2C}
+        \ganttlink{P2C}{P2D}
+        \ganttlink{P2D}{P3A}
+        \ganttlink{P3A}{P3B}
+        \ganttlink{P3B}{P3C}
+        \ganttlink{P3C}{P3D}
+        \ganttlink{P3D}{P4A}
+        \ganttlink{P4A}{P4B}
+        \ganttlink{P4B}{P5A}
+        \ganttlink{P5A}{P5B}
+
+    \end{ganttchart}
     }}
     \caption{Originally planned project timeline (2 February – 10 June 2026).}
     \label{fig:gantt}
@@ -122,12 +208,12 @@ timing as the work progressed:
           collection covering asphalt, grass, cobblestone, and dirt-track
           segments, rather than indoor controlled trials. This proved a closer
           analogue to the farm scenario while still offering more separable
-          classes for pipeline development.
+          classes for pipeline development. %NEED TO REPHRASE THIS
     \item \textbf{Domain transfer evaluation dropped.} The proxy-to-field
           domain transfer experiment planned for Week 11 was not carried out:
           the campus and farm label spaces only partially overlap (e.g.
           cobblestone and asphalt have no farm counterpart, and the farm
-          introduces compacted soil), so a like-for-like train-on-campus /
+          introduces bare agricultural soil), so a like-for-like train-on-campus /
           test-on-farm evaluation would have required additional aligned data
           collection. The campus and farm datasets are therefore reported as
           two independent classification problems, with comparison drawn at
