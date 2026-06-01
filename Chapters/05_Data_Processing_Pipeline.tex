@@ -61,7 +61,7 @@ A run is accepted (\texttt{pass\_all = True}) if and only if all of the followin
     \item \emph{Sufficient duration:} $T \ge 30\,\text{s}$.
     \item \emph{Rate in expected range:} $70 \le \tilde{f}_s \le 100\,\text{Hz}$ for the IMU, $80 \le \tilde{f}_s \le 130\,\text{Hz}$ for the odometry.
 \end{enumerate}
-In addition, the first $5\,\text{s}$ of each accelerometer and gyroscope channel is inspected for static-bias drift, and the per-axis minimum and maximum are checked against the configured full-scale range to flag saturation events. All nine production runs (four campus, five farm) passed every QC criterion. The per-run QC report (\texttt{reports/raw/\{run\}/qc\_report.json}) records the full diagnostic vector for reproducibility, and the companion \texttt{sanity.png} dashboard plots all six IMU channels and the odometry pair on a common time axis for visual inspection (\Cref{fig:sanity_dashboard}).
+In addition, the first $5\,\text{s}$ of each accelerometer and gyroscope channel is inspected for static-bias drift, and the per-axis minimum and maximum are checked against the configured full-scale range to flag saturation events. All nine production runs (four campus, five farm) passed every QC criterion. The per-run QC report (\texttt{reports/raw/\{run\}/qc\_report.\allowbreak json}) records the full diagnostic vector for reproducibility, and the companion \texttt{sanity.png} dashboard plots all six IMU channels and the odometry pair on a common time axis for visual inspection (\Cref{fig:sanity_dashboard}).
 
 \begin{figure}[H]
     \centering
@@ -88,7 +88,7 @@ For each run, a unified time grid $\{t_k\}_{k=0}^{K-1}$ is generated from $t_{\m
     t_i \le t_k < t_{i+1}.
     \label{eq:linear_interp}
 \end{equation}
-Linear interpolation was preferred over higher-order schemes (spline, sinc) because the raw sample period is short compared to the dominant signal timescales and the linear interpolant introduces only a small, flat low-pass response that does not distort the frequency bands of interest~\cite{Press2007}. The three resampled sensor frames are then merged on the common time column to produce a single per-run DataFrame with columns $(t_{\mathrm{rel}}, a_x, a_y, a_z, g_x, g_y, g_z, v_1, v_2)$.
+Linear interpolation was preferred over higher-order schemes (spline, sinc) because the raw sample period is short compared to the dominant signal timescales and the linear interpolant introduces only a small, flat low-pass response that does not distort the frequency bands of interest~\cite{Press2007}. The three resampled sensor frames are then merged on the common time column to produce a single per-run DataFrame with columns $(t_{\mathrm{rel}}, a_x, a_y, a_z, g_x, g_y,\allowbreak g_z, v_1, v_2)$.
 
 \begin{figure}[H]
     \centering
@@ -129,7 +129,7 @@ A second source of motion that is unrelated to terrain is in-place or sharp turn
 \end{equation}
 and samples with $|\dot{\psi}(t)| > \dot{\psi}_{\max}$ are unlabelled. The threshold $\dot{\psi}_{\max} = 0.2\,\text{rad/s}$ corresponds to a turning radius of approximately $\bar{v}/\dot{\psi}_{\max} \approx 2$--$3\,\text{m}$ at typical cruising speeds, which is large enough that gentle trajectory corrections are still retained while sharp pivots and on-spot rotations are removed.
 
-The two masks are combined disjunctively ($M = M_{v} \lor M_{\dot{\psi}}$), unlabelled samples are dropped, and the resulting cleaned dataset is saved to \texttt{data/interim/cleaned/cleaned\_dataset.csv} with the derived columns \texttt{net\_speed} and \texttt{yaw\_rate} retained for use downstream.
+The two masks are combined disjunctively ($M = M_{v} \lor M_{\dot{\psi}}$), unlabelled samples are dropped, and the resulting cleaned dataset is saved to \texttt{data/interim/cleaned/cleaned\_\allowbreak dataset.csv} with the derived columns \texttt{net\_speed} and \texttt{yaw\_rate} retained for use downstream.
 
 \begin{figure}[H]
     \centering
@@ -148,15 +148,15 @@ The two masks are combined disjunctively ($M = M_{v} \lor M_{\dot{\psi}}$), unla
 \section{Signal Filtering}
 \label{sec:filtering}
 
-The cleaned IMU streams contain useful terrain-related vibration up to the Nyquist frequency, but they also carry sensor noise and a small amount of mechanical resonance from the chassis that contributes no discriminative information about the surface. A causal, segment-aware low-pass filter is therefore applied to all six IMU channels in \texttt{04b\_filtering.ipynb} before windowing. Odometry channels are left unfiltered; the wheel-encoder output is already heavily quantised and benefits little from further smoothing.
+The cleaned IMU streams contain useful terrain-related vibration up to the Nyquist frequency, but they also carry sensor noise and a small amount of mechanical resonance from the chassis that contributes no discriminative information about the surface. A causal, segment-aware low-pass filter is therefore applied to all six IMU channels in \texttt{04b\_filterin\allowbreak g.ipynb} before windowing. Odometry channels are left unfiltered; the wheel-encoder output is already heavily quantised and benefits little from further smoothing.
 
 \subsection{Candidate Filters}
 
 Three filter families were considered:
 \begin{itemize}
-    \item \textbf{Butterworth low-pass}~\cite{Butterworth1930}. A maximally-flat magnitude response in the pass-band with a monotonic roll-off, applied in forward--backward (zero-phase) form via \texttt{scipy.signal.filtfilt} to avoid phase distortion of impulsive terrain events~\cite{Gustafsson1996}. Cut-off frequencies of $5$, $10$, $20$ and $30\,\text{Hz}$ were tested with filter orders $\{2, 4\}$.
-    \item \textbf{Savitzky--Golay}~\cite{Savitzky1964}. A polynomial smoother that fits a low-order polynomial to a sliding window and replaces the centre sample with the fitted value; window-lengths $\{5, 11, 21\}$ samples and polynomial order $2$ were tested.
-    \item \textbf{Moving average}. A flat-kernel low-pass with window-lengths $\{3, 5, 11\}$ samples, included as a simple baseline.
+    \item \textbf{Butterworth low-pass}~\cite{Butterworth1930}. A maximally-flat magnitude response in the pass-band with a monotonic roll-off, applied in forward--backward (zero-phase) form via SciPy's \texttt{scipy.signal.\allowbreak filtfilt} to avoid phase distortion of impulsive terrain events~\cite{Gustafsson1996}. Cut-off frequencies of $5$ and $10\,\text{Hz}$ were tested at filter orders $\{2, 4\}$, together with a $20\,\text{Hz}$ cut-off at order $2$.
+    \item \textbf{Savitzky--Golay}~\cite{Savitzky1964}. A polynomial smoother that fits a low-order polynomial to a sliding window and replaces the centre sample with the fitted value; window-lengths $\{11, 21, 51\}$ samples were tested at polynomial order $2$, together with a polynomial-order-$3$ variant at window-length $21$.
+    \item \textbf{Moving average}. A flat-kernel low-pass with window-lengths $\{5, 11, 21\}$ samples, included as a simple baseline.
 \end{itemize}
 All filters are applied per continuous segment rather than per run, because a single run can contain non-trivial gaps introduced by the cleaning stage; ignoring those gaps would smear the filter across discontinuities and create boundary artefacts.
 

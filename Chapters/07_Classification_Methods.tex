@@ -1,8 +1,170 @@
 \chapter{Classification Methods}
 \label{ch:classification}
 
+This chapter specifies the supervised classifiers used and compared in this thesis, their hyperparameter configurations, and the cross-validation protocol used to evaluate them. Four classical baseline models: logistic regression (LR), random forest (RF), gradient-boosted trees (XGboost), and a kernel SVM, are compared against themselves and against two neural models: a multilayer perception (MLP) operating on the engineered features of \Cref{ch:feature} and a 1D-convolutional network (1D-CNN) directly on the raw windowed signals built in \Cref{ch:processing}. All 6 models share the same Leave-One-Run-Out (LORO) cross-validation (CV) evaluation (\Cref{sec:eval_protocol}), so their headline numbers in \Cref{ch:results} are directly comparable. The implementation is split across 4 notebooks: \texttt{07\_baselines.ipynb} (classical untuned baseline models) and \texttt{08\_base\_tuning.ipynb} (reproduces 07 but uses tuned hyperparameters), \texttt{09\_mlp.ipynb} (MLP plus its hyperparameter tuning) and \texttt{10\_CNN\allowbreak .ipynb} (1D-CNN and its hyperparameter tuning), with the shared metric and aggregation code factored into \texttt{src/evaluation.py}.
+
 \section{Classical Machine Learning Models}
+\label{sec:classical_models}
+
+Four classical supervised classifiers are evaluated as baselines: logistic regression~\cite{Hosmer2013}, random forest~\cite{Breiman2001}, gradient-boosted trees via XGBoost~\cite{Chen2016}, and a support vector machine with an RBF kernel~\cite{Cortes1995}. All are implemented as a scikit-learn~\cite{Pedregosa2011} \texttt{Pipeline}\, consisting of a \texttt{StandardScaler} followed by the classifier, so that the per-fold feature standardisation is fitted only for the training fold and applied to the test fold without data leakage.
+
+\paragraph{Feature variants.}
+Each model is trained twice, on two feature subsets derived in \Cref{sec:feat_selection}:
+\begin{itemize}
+    \item \textbf{All pruned features.} The full correlation-pruned feature table ($141$ features for the farm dataset, $138$ for the campus dataset after the speed-column ablation).
+    \item \textbf{Top-MI shortlist.} The top $N=15$ features by mutual information against the terrain label, with mutual information recomputed on the training fold only inside the cross-validation loop ("fold-local top-MI", \Cref{sec:eval_protocol}).
+\end{itemize}
+
+\paragraph{Class-imbalance handling.}
+Each (model, feature-set) combination is run in two imbalance regimes that are reported side-by-side:
+\begin{itemize}
+    \item \textbf{Unweighted.} The classifier's default loss, with no per-class reweighting.
+    \item \textbf{Balanced.} For LR, RF and SVM, the scikit-learn \texttt{class\_weight=\textquotesingle balanced\textquotesingle} option, which scales each class's contribution by the inverse of its training frequency. For XGBoost, which does not expose a comparable built-in option, the equivalent per-sample weights are computed fold-locally via \texttt{compute\_sample\_weight} and passed through \texttt{fit}.
+\end{itemize}
+
+\paragraph{Untuned baselines.}
+The first pass (\texttt{07\_baselines.ipynb}) uses scikit-learn's default hyperparameters for all four families, with the random forest fixed to $200$ trees and XGBoost to $200$ boosting rounds at the library defaults for tree depth and learning rate. The purpose of this pass is to establish the achievable performance of an off-the-shelf classifier on the
+engineered features.
+
+\paragraph{Tuned baselines.}
+A second pass (\texttt{08\_base\_tuning.ipynb}) runs \texttt{RandomizedSearchCV} with a $4$-split \texttt{GroupKFold} that respects the run identifier, so that the inner tuning splits are themselves run-disjoint. The candidate grids and the resulting selected configurations on the farm dataset and two campus datasets are summarised in \Cref{tab:tuned_hparams}. The tuned models are then re-evaluated under the same LORO protocol as the untuned baselines, allowing the marginal effect of hyperparameter tuning to be isolated in \Cref{ch:results}.
+
+\Cref{tab:tuned_hparams} shows that the farm and three-class campus problems converge on near-identical selected hyperparameters, while the five-class campus problem consistently demands more model capacity (a deeper, larger XGBoost ensemble and substantially weaker SVM regularisation), reflecting the additional difficulty of separating five similar-roughness surfaces compared to three.
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllll}
+\toprule
+\textbf{Model} & \textbf{Search grid} & \textbf{Farm} & \textbf{Campus (3-cls)} & \textbf{Campus (5-cls)} \\
+\midrule
+LogisticRegression & $C \in \{0.1,\,1,\,10\}$ & $C=0.1$ & $C=0.1$ & $C=0.1$ \\
+RandomForest       & $n_{\text{est}}$, depth, leaf & $n{=}200$, d${=}10$, leaf $2$ & $n{=}200$, d${=}10$, leaf $1$ & $n{=}200$, d${=}10$, leaf $1$ \\
+XGBoost            & $n_{\text{est}}$, depth, lr, sub & $n{=}200$, d${=}3$, lr $0.1$, sub $0.8$ & $n{=}200$, d${=}3$, lr $0.1$, sub $1.0$ & $n{=}500$, d${=}6$, lr $0.2$, sub $1.0$ \\
+SVM (RBF)          & $C$, $\gamma$ & $C{=}10$, $\gamma{=}$\texttt{auto} & $C{=}10$, $\gamma{=}$\texttt{auto} & $C{=}0.1$, $\gamma{=}$\texttt{scale} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Hyperparameter search grids and the configurations selected by \texttt{RandomizedSearchCV} on each classification problem. The \texttt{clf\_\_} prefix used by scikit-learn pipelines is omitted for readability. Tuning is implemented in \texttt{08\_base\_tuning.ipynb} (farm) and \texttt{08b\_base\_tuning\_dataset\_B\_3class.ipynb} (campus).}
+\label{tab:tuned_hparams}
+\end{table}
 
 \section{Neural Network Models}
+\label{sec:neural_models}
+
+Two neural architectures are evaluated, both implemented in PyTorch~\cite{Paszke2019}. They span the standard contrast in the time-series literature between a feature-driven multilayer perceptron and an end-to-end convolutional network operating on the raw signal stream (\Cref{sec:bg-features-ml}).
+
+\subsection{Multilayer Perceptron (MLP)}
+
+The MLP consumes the same standardised engineered features used by the classical baselines and treats classification as a feed-forward, fully-connected mapping from feature vector to class logits. The architecture is a three-hidden-layer network with widths $[256, 128, 64]$. Each hidden layer is followed by batch normalisation, a ReLU non-linearity, and dropout with rate $0.3$; the output layer is an unactivated linear projection to the $C$ class logits, with the softmax absorbed into the cross-entropy loss. The implementation is in \texttt{09\_mlp.ipynb} (class \texttt{TerrainMLP}). Training details are summarised in \Cref{tab:nn_training}.
+
+The MLP is run on the same two feature variants as the classical baselines (all pruned, top-MI), plus a third \emph{all\_no\_speed} variant that drops the four explicit speed columns to measure how much of the MLP's performance is carried by the velocity signal versus the rest of the feature table (\Cref{sec:bg-vel}).
+
+A compact hyperparameter sweep is also reported, covering six configurations along four axes: hidden width ($\{[256,128,64], [512,256,128], [128,64]\}$), dropout rate ($\{0.3, 0.5\}$), learning rate ($\{10^{-3}, 5\!\times\!10^{-4}\}$) and weight decay ($\{10^{-4}, 10^{-3}\}$). The sweep is run under the same LORO protocol as the main evaluation and is ranked by the robustness score defined in \Cref{sec:eval_protocol}.
+
+\subsection{1D Convolutional Network (1D-CNN)}
+
+The 1D-CNN operates directly on the raw windowed IMU signals produced in \Cref{ch:processing}, with no hand-crafted feature engineering. The input tensor for one window is of shape $5 \times 200$: five channels $(a_x,\,a_y,\,a_z,\,g_x,\,g_z)$ at $200$ samples per window ($\SI{2}{\second}$ at $\SI{100}{\hertz}$). The yaw channel $g_y$ is excluded for the same reason it is omitted from the engineered features (\Cref{sec:bg-proprio,sec:feat_time}). Following the recipe widely used in human-activity recognition and IMU time-series classification~\cite{Wang2017,Fawaz2019}, the network is a stack of three one-dimensional convolutional blocks followed by a small fully-connected head (\Cref{tab:cnn_arch}). Each block applies a Conv1d layer, batch normalisation, a ReLU non-linearity and a max-pool of stride $2$ that halves the temporal resolution. A final \texttt{AdaptiveAvgPool1d} collapses the time axis and a two-layer fully-connected head produces the class logits. The implementation is in \texttt{10\_CNN.ipynb} (class \texttt{TerrainCNN1D}).
+
+\begin{table}[H]
+\centering
+\label{tab:cnn_arch}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llll}
+\toprule
+\textbf{Stage} & \textbf{Operation} & \textbf{Channels} & \textbf{T} \\
+\midrule
+Input  & — & $5$ & $200$ \\
+Block 1 & Conv1d(k=7, p=3) $\to$ BN $\to$ ReLU $\to$ MaxPool(2) & $5\!\to\!32$  & $200\!\to\!100$ \\
+Block 2 & Conv1d(k=5, p=2) $\to$ BN $\to$ ReLU $\to$ MaxPool(2) & $32\!\to\!64$ & $100\!\to\!50$ \\
+Block 3 & Conv1d(k=3, p=1) $\to$ BN $\to$ ReLU $\to$ MaxPool(2) & $64\!\to\!128$& $50\!\to\!25$ \\
+Head   & AdaptiveAvgPool(1) $\to$ FC$(128\!\to\!64)$ $\to$ ReLU $\to$ Dropout(0.3) $\to$ FC$(64\!\to\!C)$ & — & — \\
+\bottomrule
+\end{tabular}%
+}
+\caption{1D-CNN architecture. \texttt{T} denotes the temporal length, which halves after each MaxPool stage; \texttt{C} is the number of output classes ($3$ on the farm, $5$ on the campus development dataset).}
+\end{table}
+
+No per-channel normalisation is applied to the raw signals: the conv-block batch-normalisation layers absorb the channel-wise scale differences, which is preferable to a global standardisation that would couple the training and test folds.
+
+An $8$-configuration hyperparameter sweep is also reported on the 1D-CNN, covering filter widths ($\{[16,32,64],[32,64,128],[64,128,256]\}$), kernel sequences ($\{[7,5,3],[11,7,5]\}$), dropout, learning rate, weight decay and batch size. As with the MLP sweep, each configuration is run under the full LORO protocol and ranked by robustness score.
+
+\subsection{Common Training Configuration}
+
+Both neural models share the training procedure summarised in \Cref{tab:nn_training}. The Adam optimiser~\cite{Kingma2014} is used with weight decay; the learning rate is decayed from $10^{-3}$ towards $10^{-5}$ over the course of training by a cosine-annealing schedule. Class imbalance is handled by a class-weighted cross-entropy loss whose per-class weights are computed inside each fold as $w_i = N / (C\,n_i)$, where $n_i$ is the count of class $i$ in the training fold and $N$ the training-fold size. A $\SI{15}{\percent}$ stratified validation split is carved out of the training fold for early stopping; training halts when the validation loss has not improved for $20$ epochs.
+
+\begin{table}[H]
+\centering
+\label{tab:nn_training}
+\begin{tabular}{ll}
+\toprule
+\textbf{Setting} & \textbf{Value} \\
+\midrule
+Optimiser            & Adam, weight decay $10^{-4}$~\cite{Kingma2014} \\
+Initial learning rate & $10^{-3}$ \\
+LR schedule          & CosineAnnealingLR, $\eta_{\min} = 10^{-2}\,\eta_0$ \\
+Loss                 & Class-weighted cross-entropy (fold-local weights) \\
+Batch size           & $32$ (MLP), $64$ (1D-CNN) \\
+Max epochs           & $200$ \\
+Early stopping       & Patience $20$ on validation loss \\
+Validation split     & $\SI{15}{\percent}$ stratified, carved from the training fold \\
+\bottomrule
+\end{tabular}
+\caption{Training configuration shared by the MLP and the 1D-CNN.}
+\end{table}
 
 \section{Evaluation Protocol}
+\label{sec:eval_protocol}
+
+\subsection{Leave-One-Run-Out Cross-Validation}
+
+All models are evaluated under \emph{Leave-One-Run-Out cross-validation} (LORO-CV). One run is held out as the test set, the remaining runs form the training set, and the procedure is repeated until each run has served once as the held-out test. On the farm dataset this yields five folds (Run1\,$\ldots$\,Run5). On the campus dataset the longest session, \texttt{log\_20260309\_141435.414}, was substantially longer than the other three and was effectively recorded as two back-to-back routes within a single continuous log; it is therefore split at the temporal midpoint into an early \texttt{partA} and a later \texttt{partB} and treated as two independent runs by LORO. This also has the side effect of bringing the campus five-class fold count in line with the farm.
+
+LORO is chosen over within-run $k$-fold or random shuffling because the auto-correlation of IMU windows from the same run is high: a random split would mix windows that are seconds apart in the same physical traversal into both training and test sets, and the resulting accuracy would over-estimate the model's ability to generalise to a new run on a different day, terrain layout or speed regime. LORO instead measures performance under the only generalisation gap that matters for deployment: \emph{between} runs.
+
+\subsection{Per-Fold Pipeline}
+\label{sec:per_fold_pipeline}
+
+Inside each fold, the following operations are carried out strictly in order, with every fitting step bound to the training fold only:
+\begin{enumerate}
+    \item \emph{Train/test split} by run identifier.
+    \item \emph{Fold-local feature selection.} For top-MI runs, mutual information between every feature column and the terrain label is recomputed on the training fold using the $k$-nearest-neighbour estimator~\cite{Kraskov2004} with $k=5$, and the top-$N$ shortlist is kept; this differs across folds, which is the intended behaviour, since it prevents test-set information from leaking into the global ranking discussed in \Cref{sec:feat_mi_pruning}.
+    \item \emph{Standardisation.} For the classical models and the MLP, a \texttt{StandardScaler} is fitted on the training fold's feature matrix and applied to the test fold. The 1D-CNN does not standardise its inputs (the in-network batch normalisation absorbs the per-channel scale).
+    \item \emph{Validation split (NN only).} A $\SI{15}{\percent}$ stratified split is carved out of the training fold for early stopping.
+    \item \emph{Label encoding} via a \texttt{LabelEncoder} fitted on the training-fold labels only.
+    \item \emph{Class-weight computation} on the training fold.
+    \item \emph{Model fit} (with early stopping for the NNs and grid and random-search inner CV for the tuned classical models).
+    \item \emph{Inference on the held-out test fold} and computation of the per-fold metrics defined below.
+\end{enumerate}
+
+\subsection{Metrics}
+
+Per-fold predictions are summarised by overall accuracy and macro-averaged $F_1$, with $F_1$ averaged across the classes that are evaluable in that fold (i.e.\ present in both the training and the test set). Per-class precision, recall and $F_1$ are also stored, together with the per-fold confusion matrix. Per-class scores include their median, IQR and minimum and maximum across folds, which makes it easy to spot a single fold in which a class collapses.
+
+Aggregated per-model results report the mean, standard deviation, median, IQR, worst-fold value and a single scalar \emph{robustness score}
+\begin{equation}
+    r \;=\; \overline{F_1^{\mathrm{macro}}} \;-\; 0.5\,\sigma_{F_1^{\mathrm{macro}}},
+    \label{eq:robustness}
+\end{equation}
+defined in \texttt{src/evaluation.py} (\texttt{summarize\_group}). The robustness score penalises high cross-run variance, which is desirable in this setting: a model with a slightly lower mean $F_1$ but consistent behaviour across runs is preferable to one with a higher mean that fails catastrophically on a single fold.
+
+\paragraph{Confusion matrices.}
+Per-fold confusion matrices are computed with \texttt{sklearn.metrics.\allowbreak confusion\_matrix} and aggregated across folds by element-wise summation before row-normalisation, so that the aggregated matrix reflects the underlying class counts rather than averaging per-fold rates with possibly different denominators.
+
+\subsection{Reproducibility}
+
+A single integer \texttt{RANDOM\_STATE} is fixed at the top of each notebook and propagated to every stochastic component (NumPy RNG, PyTorch RNG, scikit-learn estimator \texttt{random\_state}, and the stratified validation split). All produced artefacts — per-fold metrics, aggregated tables, fitted models, confusion-matrix images and feature
+importance rankings — are written to \texttt{results/\{location\}/} and \texttt{reports/models/\{location\}/}. Together with the fixed \texttt{environment.yml} this is sufficient to reproduce any reported number bit-for-bit on the same hardware, and to within the documented sklearn/PyTorch tolerance on different hardware.
+
+\begin{figure}[H]
+    \centering
+    \placeholder{Schematic of one LORO-CV fold: input feature/window table
+    split by run id; training fold sub-split into 85\% train / 15\% val;
+    standardisation, label encoder and class weights fitted on the train
+    sub-split; early-stopped model evaluated on the held-out test run.
+    A simple TikZ flow chart matching the style of
+    \Cref{fig:pipeline_overview} would read most cleanly.}
+    \caption{Schematic of one LORO-CV fold, showing how every fitting
+    step is bound to the training fold only.}
+    \label{fig:loro_schematic}
+\end{figure}
