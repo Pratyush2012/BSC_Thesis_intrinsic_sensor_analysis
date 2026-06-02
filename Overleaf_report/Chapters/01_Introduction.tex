@@ -3,79 +3,63 @@
 
 \section{Motivation}
 
-Robotic intercropping is an emerging agricultural strategy that uses autonomous robots to cultivate multiple crop species in the same field. Field conditions constantly change and a robot that treats the environment as constant can lead to poor navigation, unnecessary stops, or damage to plants. \cite{RoboticIntercroppingProject2026} Therefore, this project aims to equip the robot with the ability to recognize the type of terrain that it experiences while driving, using only the available intrinsic motion sensors. Specifically, accelerometer and gyroscope measurements, together with wheel odometry, are used to capture vibration patterns, impacts, and motion signatures arising from robot–terrain interaction, including transitions between surface types.
+Robotic intercropping is an emerging agricultural strategy that uses autonomous robots to cultivate multiple crop species in the same field. Field conditions constantly change, and treating the environment as constant can result in poor navigation, unnecessary stops, or damage to plants\cite{RoboticIntercroppingProject2026}. Therefore, this project aims to equip the robot with the ability to recognise the type of terrain that it experiences while driving, using only the available intrinsic motion sensors. Specifically, accelerometer and gyroscope measurements, together with wheel odometry, are used to capture vibration patterns, impacts, and motion signatures arising from robot–terrain interaction, including transitions between surface types.
 
-The study considers two complementary terrain scenarios. Before the main data collection, a campus route covering smooth pavement, grass, cobblestone, and a dirt track that was recorded under both dry and wet/muddy conditions served as the development environment to build and test the full processing pipeline. The campus route was chosen to mimic different terrains found on the farm, while also including classes that provide an interesting contrast from the others — such as smooth asphalt roads and cobblestones. The clear distinction between asphalt and the softer surfaces also provides a useful reference point for comparison with the primary scenario: an actual farm, where grass, soil, and rough dirt tracks present a harder classification problem due to their greater similarity. Data were collected across multiple repeated runs on each route — four campus runs on separate days and five farm runs across two days — to assess cross-run generalisation. The effect of driving speed was also explicitly investigated by evaluating models on both the full recorded speed range and a lower, more consistent speed regime, with the latter strategy adopted during the main farm data collection. The collected data were labelled by terrain segment, and the project developed and evaluated methods ranging from classical machine learning baselines to a convolutional neural network, also examining transition detection as a harder sub-problem.
+The study considers two complementary terrain scenarios. Before the main data collection, a campus route covering smooth pavement, grass, cobblestone, and a dirt track (recorded under both dry and wet/muddy conditions on different days) served as the development environment to build and test the full processing pipeline. The campus route was chosen to mimic different terrains found on the farm, while also including classes that provide a deliberately wider roughness contrast, notably smooth asphalt and cobblestone, which bracket the farm classes from above (hard, impulsive) and below (smooth, low-vibration). The clear distinction between asphalt/cobblestone and the softer surfaces also provides a useful reference point for comparison with the primary scenario: an actual farm, where grass, soil, and rough dirt tracks present a harder classification problem due to their greater similarity. Data were collected across multiple repeated runs on each route, four campus runs on separate days and five farm runs across two days, to assess cross-run generalisation. The effect of driving speed was also explicitly investigated by evaluating models on both the full recorded speed range and a lower, more consistent speed regime, with the latter strategy adopted during the main farm data collection. The collected data were labelled by terrain segment, and the project developed and evaluated methods ranging from classical machine-learning baselines to a 1D convolutional neural network. Transition detection between adjacent segments was examined as a harder sub-problem.
 
 Overall, the project does not rely on external perception sensors such as cameras or LiDAR, but instead investigates the limits of proprioceptive terrain recognition. The goal is not to replace exteroceptive sensing, but to explore how intrinsic motion signals can complement it, providing a lightweight, always-available channel for terrain awareness that does not depend on lighting conditions, sensor range, or additional hardware.
 
 \newpage
 \section{BSc Learning Objectives}
 
-The BSc graduate from DTU: \cite{DTU_BachelorProjectRules2026}
-\begin{enumerate}
-    \item \textbf{Can work independently and is able to structure a major project, including meeting deadlines and organizing and planning the project work:} 
-    \begin{itemize}
-        \item Plan and Execute an 18-week project with milestones, regular supervision, and meetings, and timely delivery of intermediate artefacts (dataset freeze, baseline results, draft report).
-    \end{itemize}
-    
+This project addresses the five DTU BSc graduate competencies \cite{DTU_BachelorProjectRules2026} as summarised in \Cref{tab:learning_objectives}.
 
-    \item \textbf{Can summarize and interpret technical information and is fully familiar with technical problem solving through project work:} 
-    \begin{itemize}
-        \item Survey and synthesise literature on terrain classification, IMU-based event detection, time-series feature extraction, and model evaluation under domain shift; interpret results in relation to robotic intercropping requirements.
-    \end{itemize}
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{p{0.30\textwidth}p{0.62\textwidth}}
+\toprule
+\textbf{DTU BSc Objective} & \textbf{How it is met in this project} \\
+\midrule
+1. Structure and execute a major project & Planned and executed an 18-week project with weekly supervision, defined milestones, and timely intermediate deliverables (frozen dataset, baseline results, draft report). \\
 
-    \item \textbf{Is able to work with all project phases, including the preparation of proposals, solutions, and documentation:} 
-    \begin{itemize}
-        \item Formulate a concrete problem statement, specify requirements and assumptions, design the experimental protocol, implement solutions (data processing + ML models), and produce technical documentation suitable for handover and replication.
-    \end{itemize}
+2. Summarise and interpret technical information & Synthesised literature on terrain classification, IMU-based event detection, time-series feature extraction, and cross-run model evaluation; interpreted results in relation to robotic-intercropping requirements. \\
 
-    \item \textbf{Is able to independently acquire new knowledge and adopt a critical approach to the acquired knowledge and carry out relevant and critical information searches, and on this basis find the right methods to shed light on the problem in question:} 
-    \begin{itemize}
-        \item Independently identify relevant methods (e.g., windowing strategies, frequency features, sequence models, calibration, ML techniques), assess their assumptions/limitations, and justify the chosen approach using targeted information searches and critical comparison.
-    \end{itemize}
+3. Work across all project phases & Formulated the problem statement, designed the experimental protocol, implemented the data-processing pipeline and ML models, and produced reproducible technical documentation. \\
 
-    \item \textbf{Is able to communicate technical information, theory, and results in written, visual/graphic, and oral form:} 
-    \begin{itemize}
-        \item Present methods and findings clearly in written form (project report), visually (plots, confusion matrices, feature importance, robustness tests), and orally (status updates and final presentation).
-    \end{itemize}
-\end{enumerate}
+4. Independently acquire new knowledge and apply it critically & Independently studied and applied time- and frequency-domain features, mutual-information feature selection, classical and deep classifier families, and Leave-One-Run-Out cross-validation as they were needed during implementation; and iteratively refined the project itself: a scope pivot from collision detection to terrain classification, and protocol adjustments informed by the campus campaign. \\
 
+5. Communicate in written, visual, and oral form & Reported findings in the present report, in figures (confusion matrices, MI rankings, sensor-ablation plots), and in oral status updates and the final presentation. \\
+\bottomrule
+\end{tabular}
+\caption{Mapping of the project's activities to the DTU BSc graduate competencies.}
+\label{tab:learning_objectives}
+\end{table}
 
-
-
-\newpage
 \section{Problem Statement}
-
 This thesis addresses the following question:
-
 \begin{quote}
-\emph{Can terrain type be reliably classified from accelerometer, gyroscope, and wheel odometry data collected by a wheeled agricultural robot, without any external perception sensor?}
+\emph{Can terrain type be reliably classified from accelerometer, gyroscope, and wheel-odometry data collected by a wheeled agricultural robot, without any external perception sensor?}
 \end{quote}
-
-Answering this question requires addressing several sub-problems:
+The question decomposes into four sub-problems:
 \begin{enumerate}
-    \item Designing and executing a repeatable data collection protocol that produces a labelled, multi-session IMU and odometry dataset across representative terrain types, recorded on both a controlled campus development route and an operational farm.
-    \item Building a reproducible preprocessing and feature engineering pipeline that converts raw sensor logs into model-ready feature vectors.
-    \item Training and comparing multiple classifier families, from classical machine learning baselines to a convolutional neural network, under a Leave-One-Run-Out cross-validation scheme that prevents data leakage between robot runs.
-    \item Assessing how driving speed affects classification by evaluating each model on both the full recorded speed range and a lower, more consistent speed regime.
-    \item Comparing performance between the campus development scenario, where terrain classes are relatively distinct, and the farm scenario, where surfaces (grass, loose tilled soil, compacted dirt tracks) are more similar and therefore harder to separate, to characterise how terrain similarity affects achievable accuracy with the same pipeline.
-    \item Examining transition detection, identifying the boundary between two adjacent terrain segments, as a harder sub-problem than steady-state classification.
+    \item Designing and executing a repeatable data-collection and preprocessing pipeline that turns raw sensor logs from both a controlled campus development route and an operational farm into a labelled, model-ready feature table.
+    \item Training and comparing multiple classifier families, from classical baselines to a 1D convolutional neural network, under a Leave-One-Run-Out cross-validation scheme that prevents leakage between training and test runs.
+    \item Characterising how driving speed and terrain similarity affect classification, by evaluating each model on both the full and a low-constant speed regime, and by contrasting the campus and farm scenarios under the same pipeline.
+    \item Examining transition detection between adjacent terrain segments as a harder sub-problem than steady-state classification.
 \end{enumerate}
+
 
 \section{Project Scope and Delimitations}
 
-The project focuses exclusively on proprioceptive terrain recognition; no camera, LiDAR, or GPS signals are used. Classification is performed offline on pre-recorded logs, and real-time deployment and embedded implementation are left as future work.
-
-Terrain classes are restricted to surfaces accessible within the two data collection campaigns: a campus route (asphalt, grass, cobblestone, dirt tracks) used to develop the pipeline, and a farm route (grass, soil, dirt track) used as the primary target scenario. Rare events such as deep puddles or steep slopes are not covered. The campus and farm datasets are evaluated as independent classification problems with their own label spaces; direct cross-domain transfer (training on one site and testing on the other) is not performed, as the label sets do not fully overlap and harmonising them would require additional data collection beyond the scope of this thesis.
+The scope of this thesis is bounded as follows. \emph{Sensors:} only the on-board IMU (accelerometer, gyroscope) and wheel-encoder odometry are used; cameras, LiDAR, GNSS, the magnetometer, and the gyroscope's yaw channel (which encodes steering rather than terrain) are excluded. \emph{Platform:} all data are collected with a single robot, \emph{Ricbot}, in its differential-drive configuration; generalisation to other chassis is not claimed. \emph{Terrain classes:} only the surfaces encountered in the two campaigns are considered: campus (asphalt, grass, cobblestone, dry and muddy dirt track) and farm (grass, tilled soil, compacted dirt track); rare events such as deep puddles and steep slopes are out of scope. \emph{Operating conditions:} the farm dataset was recorded entirely under dry, sunny weather and at low, near-constant speed; wet-soil operation and high-speed regimes are not evaluated. \emph{Cross-domain transfer:} the campus and farm datasets are treated as two independent classification problems with their own label spaces, because the labels only partially overlap. \emph{Deployment:} classification is performed offline on pre-recorded logs; real-time and embedded deployment are left as future work.
 
 
-%TODO: fix the project plan
-\newpage
 \section{Project Plan and Execution}
 \label{sec:project-plan}
 
-The project was scoped as an 18-week effort (2 February – 8 June 2026), organised into six phases from initial planning through to final submission. The original weekly plan and milestones are summarised below; the resulting Gantt chart is shown in Figure~\ref{fig:gantt}.
+The project was scoped as an 18-week effort (2 February – 8 June 2026), organised into six phases from initial planning through to final submission. The original weekly plan and milestones are summarised below; the resulting Gantt chart is shown in \Cref{fig:gantt}.
 
 \subsection{Planned Schedule}
 
@@ -83,15 +67,9 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
     \item \textbf{Phase 0 — Project Management (W1–2):} define research questions, terrain classes, and success criteria; risk assessment and timeline.
     \item \textbf{Phase 1 — Data Foundation (W2–3):} ingestion pipeline with time alignment, automated quality control, and a labelling system.
     \item \textbf{Phase 2 — Proxy Data \& Preprocessing (W2–7):} controlled proxy data collection, resampling and sliding-window extraction, and the first time- and frequency-domain feature set; \emph{Proxy Dataset Freeze}.
-    \item \textbf{Phase 3 — Modelling, Evaluation \& Field Collection (W8–11):}
-          classical baselines (LR, RF, XGBoost, SVM) and neural models (MLP, 1D-CNN)
-          under Leave-One-Run-Out cross-validation, followed by outdoor field data
-          collection and a proxy-to-field domain transfer evaluation.
-    \item \textbf{Phase 4 — Validation \& Documentation (W12–15):} robustness
-          tests (noise injection, sensor dropout) and the methodology and results
-          writing sprint.
-    \item \textbf{Phase 5 — Finalisation (W16–18):} introduction, literature
-          review, revisions, and submission on 10 June 2026.
+    \item \textbf{Phase 3 — Modelling, Evaluation \& Field Collection (W8–11):} classical baselines (LR, RF, XGBoost, SVM) and neural models (MLP, 1D-CNN) under Leave-One-Run-Out cross-validation, followed by outdoor field data collection and a proxy-to-field domain transfer evaluation.
+    \item \textbf{Phase 4 — Validation \& Documentation (W12–15):} robustness tests (noise injection, sensor dropout) and the methodology and results writing sprint.
+    \item \textbf{Phase 5 — Finalisation (W16–18):} introduction, literature review, revisions, and submission on 8 June 2026.
 \end{itemize}
 
 
@@ -104,7 +82,7 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
 \begin{figure}[htbp]
     \centering
     \makebox[\textwidth][c]{%
-    \resizebox{1.3\textwidth}{!}{%
+    \resizebox{1.2\textwidth}{!}{%
     \begin{ganttchart}[
         canvas/.style={draw=black!25, line width=.6pt},
         hgrid style/.style={draw=black!25, line width=.6pt},
@@ -144,7 +122,7 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
 
         % PHASE 2
         \ganttgroup[group/.append style={fill=phase2}]{Phase 2: Proxy Data \& Preprocessing}{2026-02-15}{2026-03-21} \\
-        \ganttbar[bar/.append style={fill=phase2}, name=P2A]{Proxy Data Collection (Indoor)}{2026-02-15}{2026-03-07} \\
+        \ganttbar[bar/.append style={fill=phase2}, name=P2A]{Proxy Data Collection}{2026-02-15}{2026-03-07} \\
         \ganttbar[bar/.append style={fill=phase2}, name=P2C]{Sync, Resample \& Windowing}{2026-03-08}{2026-03-14} \\
         \ganttbar[bar/.append style={fill=phase2}, name=P2D]{Feature Engineering Foundation}{2026-03-15}{2026-03-21} \\
         \ganttmilestone[milestone/.append style={fill=phase2}, name=MS1]{Proxy Dataset Freeze}{2026-03-21} \\
@@ -164,10 +142,10 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
         \ganttbar[bar/.append style={fill=phase4}, name=P4B]{Methodology \& Results Sprint}{2026-05-03}{2026-05-16} \\
 
         % PHASE 5
-        \ganttgroup[group/.append style={fill=phase5}]{Phase 5: Finalisation}{2026-05-17}{2026-06-10} \\
+        \ganttgroup[group/.append style={fill=phase5}]{Phase 5: Finalisation}{2026-05-17}{2026-06-08} \\
         \ganttbar[bar/.append style={fill=phase5}, name=P5A]{Lit Review \& Conclusions}{2026-05-17}{2026-05-30} \\
-        \ganttbar[bar/.append style={fill=phase5}, name=P5B]{Final Revisions \& Submission}{2026-05-31}{2026-06-09} \\
-        \ganttmilestone[milestone/.append style={fill=phase5}, name=MS3]{FINAL SUBMISSION}{2026-06-10}
+        \ganttbar[bar/.append style={fill=phase5}, name=P5B]{Final Revisions \& Submission}{2026-05-31}{2026-06-07} \\
+        \ganttmilestone[milestone/.append style={fill=phase5}, name=MS3]{FINAL SUBMISSION}{2026-06-08}
 
         % Links
         \ganttlink{P0A}{P0B}
@@ -186,61 +164,105 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
 
     \end{ganttchart}
     }}
-    \caption{Originally planned project timeline (2 February – 10 June 2026).}
+    \caption{Originally planned project timeline (2 February – 8 June 2026).}
     \label{fig:gantt}
 \end{figure}
 
+\begin{figure}[H]
+    \centering
+    \makebox[\textwidth][c]{%
+    \resizebox{1.2\textwidth}{!}{%
+    \begin{ganttchart}[
+        canvas/.style={draw=black!25, line width=.6pt},
+        hgrid style/.style={draw=black!25, line width=.6pt},
+        vgrid={*1{draw=black!5, line width=.6pt}},
+        title/.style={draw=black!25, fill=none},
+        title label font=\bfseries\normalsize,
+        include title in canvas=false,
+        bar/.append style={draw=none},
+        bar height=.6,
+        y unit title=1.2cm,
+        y unit chart=1.1cm,
+        bar label font=\normalsize\color{black!80},
+        bar label node/.append style={align=right, text width=6cm},
+        group label font=\normalsize\bfseries\color{black!85},
+        group label node/.append style={align=right, text width=6cm},
+        progress label text={},
+        group right shift=0,
+        group top shift=.6,
+        group height=.3,
+        x unit=0.34cm,
+        time slot format=isodate,
+        calendar week text={W\currentweek},
+        link/.style={-stealth, draw=black!45, rounded corners=2pt}
+    ]{2026-02-02}{2026-06-12}
+
+        \gantttitlecalendar{month=name, week=1} \\
+
+        % PHASE 0 — as planned
+        \ganttgroup[group/.append style={fill=phase0}]{Phase 0: Project Management}{2026-02-02}{2026-02-14} \\
+        \ganttbar[bar/.append style={fill=phase0}, progress=100]{Research Questions \& Scope Pivot}{2026-02-02}{2026-02-14} \\
+
+        % PHASE 1 — slipped ~4 days
+        \ganttgroup[group/.append style={fill=phase1}]{Phase 1: Data Foundation}{2026-02-15}{2026-03-04} \\
+        \ganttbar[bar/.append style={fill=phase1}, progress=100]{Pipeline, QC \& Labelling}{2026-02-15}{2026-03-04} \\
+
+        % PHASE 2 — campus data ran longer
+        \ganttgroup[group/.append style={fill=phase2}]{Phase 2: Campus Data \& Pipeline}{2026-02-23}{2026-03-27} \\
+        \ganttbar[bar/.append style={fill=phase2}, progress=100]{Campus Data Collection (4 runs)}{2026-02-23}{2026-03-26} \\
+        \ganttbar[bar/.append style={fill=phase2}, progress=100]{Sync, Resample \& Features}{2026-03-05}{2026-03-19} \\
+        \ganttmilestone[milestone/.append style={fill=phase2}]{Campus Dataset Freeze}{2026-03-27} \\
+
+        % PHASE 3 — extended; absorbs Phase 4
+        \ganttgroup[group/.append style={fill=phase3}]{Phase 3: Modelling \& Analysis}{2026-03-22}{2026-05-11} \\
+        \ganttbar[bar/.append style={fill=phase3}, progress=100]{Classical + Neural Models (Campus)}{2026-03-22}{2026-04-10} \\
+        \ganttmilestone[milestone/.append style={fill=phase3}]{Speed-Regime A/B Split Added}{2026-03-30} \\
+        \ganttbar[bar/.append style={fill=phase3}, progress=100]{Sensor Ablation \& Transition (Campus)}{2026-04-11}{2026-04-20} \\
+        \ganttbar[bar/.append style={fill=phase3}, progress=100]{Farm Data Collection (5 runs)}{2026-04-21}{2026-04-28} \\
+        \ganttbar[bar/.append style={fill=phase3}, progress=100]{Farm Models + 3-class Matched Analysis}{2026-04-29}{2026-05-05} \\
+        \ganttbar[bar/.append style={fill=phase3}, progress=100]{CUSUM Change Detection}{2026-05-06}{2026-05-09} \\
+        \ganttmilestone[milestone/.append style={fill=phase3}]{Final Model Comparison Locked}{2026-05-11} \\
+
+        % PHASE 5 — writing; started ~2 weeks earlier than planned
+        \ganttgroup[group/.append style={fill=phase5}]{Phase 5: Writing \& Submission}{2026-05-04}{2026-06-08} \\
+        \ganttbar[bar/.append style={fill=phase5}, progress=100]{Methodology \& Results}{2026-05-04}{2026-05-16} \\
+        \ganttbar[bar/.append style={fill=phase5}, progress=100]{Introduction \& Lit Review}{2026-05-17}{2026-05-30} \\
+        \ganttbar[bar/.append style={fill=phase5}]{Final Revisions \& Submission}{2026-05-31}{2026-06-07} \\
+        \ganttmilestone[milestone/.append style={fill=phase5}]{FINAL SUBMISSION}{2026-06-08}
+
+    \end{ganttchart}
+    }}
+    \caption{Actual project execution timeline. Phase~4 (Validation \&
+    Documentation) was absorbed into Phase~3 as the sensor-ablation
+    and transition-detection studies. The writing phase started on
+    4 May, roughly two weeks ahead of the original plan, to absorb
+    the slip in the final model-comparison milestone.}
+    \label{fig:gantt_actual}
+\end{figure}
+
+
 \subsection{Deviations from the Plan}
 
-The overall phase structure held, but several elements shifted in scope or
-timing as the work progressed:
+The overall six-phase structure held, but several elements shifted
+(\Cref{fig:gantt_actual}):
 
 \begin{itemize}
-    \item \textbf{Data collection ran longer than planned.} Campus data
-          collection was originally scheduled for 15 February – 7 March 2026
-          but actually spanned 23 February – 26 March, and the farm collection
-          planned for the week of 5–11 April was carried out on 21-28 April.
-          In both cases the delays were driven by robot availability and
-          maintenance issues, and by weather conditions unsuitable for outdoor
-          recording.
-    \item \textbf{Proxy data reframed as a campus development route.} The
-          original ``proxy'' phase was executed as a four-run campus data
-          collection covering asphalt, grass, cobblestone, and dirt-track
-          segments, rather than indoor controlled trials. This proved a closer
-          analogue to the farm scenario while still offering more separable
-          classes for pipeline development. %NEED TO REPHRASE THIS
-    \item \textbf{Domain transfer evaluation dropped.} The proxy-to-field
-          domain transfer experiment planned for Week 11 was not carried out:
-          the campus and farm label spaces only partially overlap (e.g.
-          cobblestone and asphalt have no farm counterpart, and the farm
-          introduces bare agricultural soil), so a like-for-like train-on-campus /
-          test-on-farm evaluation would have required additional aligned data
-          collection. The campus and farm datasets are therefore reported as
-          two independent classification problems, with comparison drawn at
-          the \emph{performance} level rather than via direct transfer.
-    \item \textbf{Speed-regime analysis added.} An explicit comparison between
-          the full recorded speed range and a lower, more consistent speed
-          regime was added as a separate evaluation axis, after early results
-          showed that speed variability was a major confound. The low-speed
-          strategy was subsequently adopted during the main farm collection.
-    \item \textbf{Transition detection added as a sub-problem.} An additional
-          analysis of segment-boundary detection was introduced as a harder
-          stress test of the pipeline than steady-state classification alone.
-    \item \textbf{Robustness work consolidated into the model-comparison
-          stage.} The noise-injection and sensor-dropout tests originally
-          scoped as a separate Phase 4 activity were folded into the final
-          model comparison (notebook \texttt{11\_model\_comparison}), so that
-          robustness was reported alongside per-model accuracy rather than
-          as a standalone study.
+    \setlength{\itemsep}{2pt}
+    \item \textbf{Scope pivot during planning.} The original target was terrain-induced collision detection; this was dropped because collecting sufficient collision data was  infeasible without risking damage to Ricbot, and the scope was refocused on terrain-segment classification.
+    \item \textbf{Data collection ran longer than planned} (campus: 23 Feb – 26 Mar instead of 15 Feb – 7 Mar; farm: 21 \& 28 Apr instead of 5–11 Apr), driven by robot availability, maintenance and weather. The campus dataset freeze slipped from 21 March to 27 March.
+    \item \textbf{Speed-regime A/B split added (30 March).} Early campus results showed that speed variability and class imbalance were major confounds, so an explicit comparison between the full speed range (Dataset~A) and a low, near-constant regime (Dataset~B) was added. The low-speed strategy was subsequently adopted on the farm, a more realistic deployment scenario.
+    \item \textbf{Domain transfer evaluation dropped.} The campus and farm label spaces only partially overlap, so the two datasets are reported as independent classification problems rather than via direct train-on-campus / test-on-farm transfer.
+    \item \textbf{Additional analyses added (18 April – 9 May):} sensor-zeroing and baseline transition detection as new evaluation axes; a three-class matched campus subset for a like-for-like comparison with the farm; and a CUSUM change detector on classifier posteriors as a principled alternative transition detector, following \cite[\S6.4]{Blanke2003}.
+    \item \textbf{Phase~4 absorbed into Phase~3; writing started two weeks earlier.} The ablation work replaced the originally separate Phase~4. The final model comparison was locked on 11 May (vs.\ planned 18 April) due to the farm data collection delay and some pipeline changes, and writing began on 4 May (vs.\ planned 17 May).
 \end{itemize}
 
-These adjustments preserved the project's central question — whether terrain
-type can be reliably classified from proprioceptive signals alone — while
-reallocating effort from experiments whose preconditions were not met
-(label-aligned cross-site transfer) toward analyses that the data actually
-supported (speed regimes, transition detection, and side-by-side campus vs.\
-farm performance under noise and dropout).
 
-
-%TODO
 \section{Thesis Outline}
+
+\Cref{ch:background} reviews the relevant background on proprioceptive terrain classification, IMU signals, and the feature families and supervised learning methods used in this work. \Cref{ch:setup} and \Cref{ch:collection} then describe the Ricbot platform, its sensor suite, the two outdoor data-collection campaigns (campus development and main agricultural), and the manual video-aided labelling procedure.
+
+The methodology is presented in three chapters: \Cref{ch:processing} covers the preprocessing pipeline (QC, synchronisation, cleaning, filtering, sliding-window segmentation); \Cref{ch:feature} the 189 time and frequency-domain features, the speed-regime A/B dataset split, and the mutual-information ranking with correlation pruning; and \Cref{ch:classification} the six classifier families and the Leave-One-Run-Out cross-validation protocol.
+
+\Cref{ch:results} reports the full numerical findings: classification performance on both datasets, sensor-ablation, and transition detection, and \Cref{ch:discussion,ch:conclusion} interpret them and outline future work.
+
+In brief, the thesis shows that intrinsic motion signals alone are sufficient to recognise terrain on both scenarios, that careful feature engineering keeps classical learners competitive with a 1D-CNN, and that the accelerometer and gyroscope carry the bulk of the discriminative information.

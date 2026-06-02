@@ -1,37 +1,10 @@
 \section*{Abstract}
 \addcontentsline{toc}{section}{Abstract}
 
-Autonomous agricultural robots operating in dynamic field environments must adapt to
-varying terrain conditions to maintain safe and efficient navigation.
-This thesis investigates whether terrain type can be reliably inferred from
-\emph{intrinsic} sensors alone — accelerometer, gyroscope, and wheel odometry —
-without relying on cameras or LiDAR.
+Autonomous agricultural robots operating in real fields must adapt to the surface they are driving on to navigate safely and avoid damaging crops. This thesis therefore asks whether terrain type can be recognised reliably from a wheeled robot's intrinsic motion sensors alone: accelerometer, gyroscope and wheel-encoder odometry, without any camera, LiDAR or GNSS signal.
 
-A complete machine learning pipeline was designed and implemented, covering raw sensor
-quality control, multi-modal synchronisation at 100\,Hz, terrain labelling, signal
-cleaning, sliding-window segmentation (2\,s windows, 50\,\% overlap), and the
-extraction of over 100 time-domain and frequency-domain features per window.
-Six classifier families were evaluated under a leak-safe five-fold group
-cross-validation scheme: Logistic Regression, Random Forest, XGBoost, Support Vector
-Machine, Multilayer Perceptron (MLP), and a 1D Convolutional Neural Network (CNN).
+A complete proprioceptive terrain-classification pipeline was designed and evaluated end-to-end on \emph{Ricbot}, a small wheeled robot developed at DTU. Data were collected in two outdoor campaigns: a four-run campus campaign (February–March 2026) covering five urban surfaces and used to develop the pipeline, and a primary five-run farm campaign (April 2026) covering the three agriculturally relevant classes \emph{grass}, \emph{tilled soil} and \emph{compacted dirt track}. The pipeline performs automated quality control followed by multi-sensor synchronisation at 100\,Hz, video-aided labelling, removal of low-speed and turning segments, then applies low-pass filtering and windows the data using sliding-window segmentation (2\,s, 50\,\% overlap). We end up extracting 189 time and frequency-domain features per window. Six classifier families, from classical baselines (logistic regression, random forest, XGBoost and kernel SVM) to a multilayer perceptron and a 1D convolutional network operating directly on the raw signals, were compared under a Leave-One-Run-Out cross-validation protocol that enforces strict run-disjoint generalisation.
 
-On a five-class terrain dataset collected across five recording sessions on varied
-surfaces (smooth terrain, grass, dry dirt track, muddy dirt track, and cobblestone),
-the best model — an MLP operating on the top-25 mutual-information-ranked features —
-achieved a macro-averaged F\textsubscript{1} score of 0.766.
-Classical models tuned with randomised search reached comparable performance
-(Logistic Regression: 0.775 on top-25 features), demonstrating that
-expressive feature engineering can largely close the gap between classical and
-deep models for this task.
-A simplified three-class grouping (smooth, grass, rough) raised the best F\textsubscript{1}
-to 0.974, confirming that the principal difficulty lies in distinguishing
-visually similar loose-surface classes.
+On the primary farm dataset, the best model reached a macro-averaged F\textsubscript{1} of \textbf{0.87}, with all other models within one standard deviation. The narrow spread shows that careful feature engineering keeps classical learners competitive with deep architectures at this data scale. On a matched three-class campus subset the same pipeline reached \textbf{0.98} F\textsubscript{1}, indicating that the residual difficulty on the farm lies in separating physically similar loose-soil surfaces rather than in any limitation of the pipeline itself. A sensor-ablation study identified the \textbf{accelerometer and gyroscope} as the dominant information sources — test-time zeroing cost 0.33 and 0.26 absolute F\textsubscript{1}, respectively — while odometry contributes nothing directly at test time. A transition-detection analysis showed that the neural models flag terrain changes with sub-second median delay and 2 to 13 second mean delay, and a CUSUM detector on the classifier posteriors is added as a principled extension with a tunable false-alarm rate.
 
-Sensor importance analysis revealed that the gyroscope is the most critical modality:
-zeroing gyroscope channels at test time caused a $-$38.7\,\% drop in F\textsubscript{1},
-while complete odometry ablation had a negligible impact ($-$0.5\,\%).
-Transition detection experiments showed that Random Forest and MLP can identify
-terrain changes with a median delay of under one second, even without any explicit
-change-point model.
-
-\placeholder{Update abstract with farm data results once collected (expected May–June 2026). Include cross-domain F1, transfer-learning outcome, and key farm-specific findings.}
+Overall, the thesis demonstrates that intrinsic motion signals alone are sufficient to recognise the terrain a small agricultural robot is driving on, that careful feature engineering keeps classical learners competitive with deep architectures at this data scale, and that the accelerometer and gyroscope dominate the information budget. The result supports proprioceptive terrain classification as a lightweight, always-available complement to camera- and LiDAR-based perception in robotic intercropping.
