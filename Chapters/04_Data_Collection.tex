@@ -1,18 +1,18 @@
 \chapter{Data Collection}
 \label{ch:collection}
 
-Two outdoor recording campaigns were carried out with Ricbot during this work (\Cref{tab:campaigns}). The earlier \emph{Initial Development} campaign was recorded on and around the DTU Lyngby campus between February and March 2026 and was used to design and validate the processing pipeline itself. The later \emph{Main Agricultural} campaign, recorded at a farm in Taastrup in April 2026, forms the primary dataset on which all classifiers in this thesis are trained, tuned, and cross-validated.
+Two outdoor recording campaigns were carried out with Ricbot (\Cref{tab:campaigns}). The earlier \emph{Initial Development} campaign was recorded on and around the DTU Lyngby campus in February–March 2026 and was used to develop the processing pipeline. The later \emph{Main Agricultural} campaign was recorded at a farm in Taastrup in April 2026 and forms the primary dataset on which all classifiers are trained, tuned and evaluated (\Cref{fig:farm_route}).
 
 \begin{table}[H]
 \centering
 \caption{Overview of the two data-collection campaigns.}
 \label{tab:campaigns}
-\begin{tabular}{lllp{4.4cm}}
+\begin{tabular}{lllp{4cm}}
 \toprule
 \textbf{Campaign} & \textbf{Period} & \textbf{Environment} & \textbf{Role} \\
 \midrule
-Initial Development  & Feb–Mar 2026  & Campus / urban paths & Pipeline development; high-separability reference  \\
-Main Agricultural    & Apr 2026      & Working farm & Primary training, tuning, and evaluation \\
+Initial Development & Feb–Mar 2026 & DTU Lyngby campus & Pipeline development; high-separability reference \\ 
+Main Agricultural   & Apr 2026     & Working farm      & Primary training, tuning and evaluation \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -20,36 +20,36 @@ Main Agricultural    & Apr 2026      & Working farm & Primary training, tuning, 
 \section{Initial Development Dataset}
 \label{sec:initial_dev_dataset}
 
-The Initial Development dataset (stored under \texttt{data/raw/Main} in the project repository) was recorded across four sessions on and around the DTU Lyngby campus between February and March 2026. The intent of this campaign was twofold. First, to gather a first body of labelled IMU and odometry data covering a wide range of outdoor surfaces — asphalt, grass, cobblestone and dirt track — so that the full processing pipeline could be designed and debugged against real, varied data rather than synthetic signals. Second, to use that data to make the practical pipeline-design decisions that the rest of the thesis depends on: the analysis-window length, the minimum amount of useful data required per run for stable Leave-One-Run-Out (LORO) cross-validation, and the approximate target number of runs per terrain class needed before results become reproducible. Because the campus terrain classes (notably asphalt and cobblestone) have no counterpart on the farm, the two campaigns are evaluated as two \emph{independent classification problems}, each with its own label space, rather than via direct train-on-campus / test-on-farm transfer. The campus dataset therefore plays two roles in this thesis: the pipeline-development substrate, and a parallel five-class problem whose results serve as a high-separability reference point against which the harder farm dataset is compared (\Cref{ch:results}).
+The Initial Development dataset was recorded across four sessions around the DTU Lyngby campus in February–March 2026, with two goals: to gather labelled IMU and odometry data covering a range of outdoor surfaces (asphalt, grass, cobblestone, dry and muddy dirt track) so that the processing pipeline could be designed against real signals; and to fix the pipeline-design decisions that follow: the analysis-window length, the minimum useful run duration for stable Leave-One-Run-Out (LORO) cross-validation, and the target number of runs per terrain class needed before results become reproducible. Because the campus classes (asphalt and cobblestone) have no counterpart on the farm, the two campaigns are evaluated as \emph{independent classification problems} with their own label spaces, rather than via direct train-on-campus / test-on-farm transfer. The campus dataset therefore plays two roles: pipeline-development substrate, and a parallel five-class problem that serves as a high-separability reference for the harder farm dataset (\Cref{ch:results}).
 
-The four campus sessions are summarised in \Cref{tab:main_sessions}. Each session followed a predefined route covering several terrain types in sequence. The 9 March session was the longest of the four and was driven as two back-to-back routes within one continuous log; in all downstream analysis, it is split at its temporal midpoint and treated as two independent runs: "RunA" and "RunB" from \Cref{ch:classification} onwards. The robot was teleoperated at approximately constant speed within each terrain segment whenever feasible. Weather conditions varied substantially across the campaign, ranging from wet snow to dry pavement, which is one of the reasons this dataset was retained as a stress-test rather than promoted to the primary training set.
+The four sessions are summarised in \Cref{tab:main_sessions}. Each followed a predefined route covering several terrain types in sequence, with the robot operated at approximately constant speed within each terrain segment whenever feasible. The 9 March session was the longest and covered two back-to-back routes within a single log; it is split at its temporal midpoint and treated as two independent runs (\texttt{RunA} and \texttt{RunB}) from \Cref{ch:classification} onwards. Weather varied across the campaign, wet snow on the early February sessions and mostly dry by late March, which is one of the reasons this dataset was retained as a stress-test rather than promoted to the primary training set.
 
 \begin{table}[H]
 \centering
-\caption{Sessions in the Initial Development dataset.}
+\caption{Sessions in the Initial Development dataset. Duration is total raw recording time, including unlabelled intervals (stops, turns) that are removed in preprocessing.}
 \label{tab:main_sessions}
-\begin{tabular}{llp{5.0cm}p{3.4cm}}
+\begin{tabular}{llrp{4.0cm}p{3.0cm}}
 \toprule
-\textbf{Run ID} & \textbf{Date} & \textbf{Conditions} & \textbf{Terrains present} \\
+\textbf{Run ID} & \textbf{Date} & \textbf{Duration} & \textbf{Conditions} & \textbf{Terrains present} \\
 \midrule
-\texttt{log\_20260223\_142511} & 23 Feb 2026 & Snowy and wet; wet snow on grass & grass, smooth, muddy dirt track \\
-\texttt{log\_20260226\_102148} & 26 Feb 2026 & Less snowy, mostly wet & grass, smooth, muddy dirt track \\
-\texttt{log\_20260309\_141435} &  9 Mar 2026 & Mostly dry; rough sections & grass, smooth, dry dirt track, cobblestone \\
-\texttt{log\_20260326\_120021} & 26 Mar 2026 & Mostly dry & grass, smooth, cobblestone \\
+\texttt{log\_20260223\_142511} & 23 Feb & 48.7\,min & Snowy and wet & grass, smooth, muddy dirt track \\
+\texttt{log\_20260226\_102148} & 26 Feb & 36.2\,min & Less snowy, mostly wet & grass, smooth, muddy dirt track \\
+\texttt{log\_20260309\_141435} &  9 Mar & 60.0\,min & Dry & grass, smooth, dry dirt track, cobblestone \\
+\texttt{log\_20260326\_120021} & 26 Mar & 30.8\,min & Dry & grass, smooth, cobblestone \\
+\midrule
+\multicolumn{2}{l}{\textbf{Total}} & \textbf{175.7\,min} & & \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\placeholder{Optional: add total recording duration per session and the
-total labelled duration per terrain class (in minutes). These numbers
-can be filled in from the per-run QC reports in \texttt{reports/raw/}.}
+
 
 \section{Main Agricultural Dataset}
 \label{sec:farm_dataset}
 
-The Main Agricultural dataset (stored under \texttt{data/raw/Farm} in the project repository) was recorded on two field days at a working farm during April 2026 and constitutes the primary dataset for this thesis. It was collected after the Initial Development campaign once the preprocessing pipeline, the windowing length, and the LORO cross-validation protocol had been fixed; data was therefore gathered with a specific target number of runs per class in mind, on a single site, under broadly consistent weather conditions, so that the resulting class distributions are balanced enough for stable cross-validated learning.
+The Main Agricultural dataset was recorded on two field days at a working farm in April 2026 and is the primary dataset for this thesis. It was collected after the Initial Development campaign, once the preprocessing pipeline, windowing length and LORO cross-validation protocol had been fixed; data was therefore gathered with a specific target number of runs per class, on a single site, under broadly consistent weather conditions, so that the resulting class distributions are balanced enough for stable cross-validated learning.
 
-Five runs were recorded in total, spread across the two field days, following \emph{similar but deliberately non-identical} routes (\Cref{tab:farm_sessions}). Between runs the precise location of the dirt-track, soil and grass segments was varied within the same field, and the order in which the terrain classes were traversed was permuted; this is a deliberate choice that exposes the classifier to a wider range of within-class conditions and prevents it from learning route-specific cues rather than terrain-specific features. Each route was selected so that all three target terrain classes appear multiple times per run with comparable segment durations. All five runs were carried out under dry, sunny conditions with light wind, which keeps environmental confounds approximately constant across runs and means that the remaining inter-run variation is predominantly attributable to the controlled route differences described above and to operator-driven variation in speed, rather than to weather.
+Five runs were recorded in total, spread across the two field days and following \emph{similar but deliberately non-identical} routes (\Cref{tab:farm_sessions,fig:farm_route}). Between runs the precise location of the dirt-track, soil and grass segments was varied within the same field, and the order in which the terrain classes were traversed was permuted; this exposes the classifier to a wider range of within-class conditions and prevents it from learning route-specific cues. Each route was selected so that all three target terrain classes appear multiple times per run with comparable segment durations. All five runs were carried out under dry, sunny conditions with light wind, which keeps environmental confounds approximately constant; the remaining inter-run variation is therefore attributable to the controlled route differences above and to operator-driven variation in speed, not to weather.
 
 \begin{table}[H]
 \centering
@@ -57,7 +57,7 @@ Five runs were recorded in total, spread across the two field days, following \e
 \label{tab:farm_sessions}
 \begin{tabular}{lllp{4.0cm}}
 \toprule
-\textbf{Run ID} & \textbf{Date} & \textbf{Time}      & \textbf{Conditions} \\
+\textbf{Run ID} & \textbf{Date} & \textbf{Time} & \textbf{Conditions} \\
 \midrule
 \texttt{Run1} & 21 Apr 2026 & 13:34–13:54 & Sunny, slightly windy, dry \\
 \texttt{Run2} & 21 Apr 2026 & 13:56–14:17 & Sunny, slightly windy, dry \\
@@ -70,23 +70,24 @@ Five runs were recorded in total, spread across the two field days, following \e
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{Pictures/Photos/farm_route.png}
-    \caption{GPS trace of the Farm data-collection run on 2026-04-28. The route is coloured by terrain class (grass, soil, and dirt track), with a short transition segment shown in grey where the robot was turning between classes. Start and end positions are marked in green and red, respectively. Note that this GPS trace was recorded during the first Farm run (2026-04-21).}
+    \includegraphics[width=\textwidth]{Pictures/Photos/farm_route.png}
+    \caption{GPS trace of the first Farm run (\texttt{Run1}, 21 April 2026), coloured by terrain class (grass, soil, dirt track); short transition segments where the robot was turning between classes are shown in grey, and the start and end positions are marked in green and red.}
     \label{fig:farm_route}
 \end{figure}
 
+\newpage
 \section{Terrain Classes and Labelling Strategy}
 \label{sec:terrain_classes_and_labels}
 
 \subsection{Primary Terrain Classes (Farm)}
 
-Three terrain classes are considered in the primary classification problem, all recorded at the agricultural site during the Main Agricultural campaign (\Cref{tab:farm_terrain_classes}).
+Three terrain classes are considered in the primary classification problem, all from the Main Agricultural campaign (\Cref{tab:farm_terrain_classes,fig:farm_terrain_photos}).
 
 \begin{table}[H]
 \centering
 \caption{Primary terrain classes (Main Agricultural dataset).}
 \label{tab:farm_terrain_classes}
-\begin{tabular}{lp{9cm}}
+\begin{tabular}{lp{12cm}}
 \toprule
 \textbf{Class} & \textbf{Description} \\
 \midrule
@@ -99,44 +100,40 @@ Three terrain classes are considered in the primary classification problem, all 
 
 \begin{figure}[H]
     \centering
-    % First Panel (Grass)
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth, height = 5cm]{Pictures/Photos/Grass_farm.jpg}
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/Grass_farm.jpg}
         \caption{Grass}
         \label{subfig:grass}
     \end{subfigure}
-    \hfill % Adds horizontal spacing between the images
-    % Second Panel (Dirt Track)
+    \hfill
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth, height = 5cm]{Pictures/Photos/Dirt_farm.jpg}
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/Dirt_farm.jpg}
         \caption{Dirt Track}
         \label{subfig:dirt}
     \end{subfigure}
     \hfill
-    % Third Panel (Soil)
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth, height = 5cm]{Pictures/Photos/Soil_farm.jpg}
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/Soil_farm.jpg}
         \caption{Soil}
         \label{subfig:soil}
     \end{subfigure}
-    
     \caption{Representative photographs of the three primary terrain classes.}
     \label{fig:farm_terrain_photos}
 \end{figure}
 
-
 \subsection{Extended Terrain Classes (Initial Development)}
 
-The Initial Development campaign covers a wider variety of urban surfaces and is reported in this thesis as a parallel classification problem on its own label space, rather than as a target for direct cross-site transfer from the Main Agricultural data. As stated in \Cref{sec:initial_dev_dataset}, it serves as a higher-separability reference point against which the harder farm dataset is compared in \Cref{ch:results}. Five classes are present in the campus logs (\Cref{tab:main_terrain_classes}).
+The Initial Development campaign covers a wider variety of urban surfaces. It is reported as a parallel classification problem on its own label space, rather than as a target for cross-site transfer from the farm data. Five classes are present
+(\Cref{tab:main_terrain_classes,fig:main_terrain_photos}).
 
 \begin{table}[H]
 \centering
 \caption{Terrain classes present in the Initial Development dataset.}
 \label{tab:main_terrain_classes}
-\begin{tabular}{lp{9cm}}
+\begin{tabular}{lp{10cm}}
 \toprule
 \textbf{Class} & \textbf{Description} \\
 \midrule
@@ -151,7 +148,6 @@ The Initial Development campaign covers a wider variety of urban surfaces and is
 
 \begin{figure}[H]
     \centering
-    % ROW 1
     \begin{subfigure}[b]{0.30\textwidth}
         \centering
         \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/grass_campus.jpg}
@@ -172,34 +168,31 @@ The Initial Development campaign covers a wider variety of urban surfaces and is
         \caption{Muddy dirt track}
         \label{subfig:mud_campus}
     \end{subfigure}
-    
-    \par\bigskip % This forces the next images to a new row with nice spacing
-    
-    % ROW 2
+
+    \par\bigskip
+
     \begin{subfigure}[b]{0.30\textwidth}
         \centering
         \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/cobblestone_campus.jpg}
         \caption{Cobblestone track}
         \label{subfig:cobblestone_campus}
     \end{subfigure}
-    \qquad % Adds a wider horizontal gap to keep the bottom two centered/spaced nicely
+    \qquad
     \begin{subfigure}[b]{0.30\textwidth}
         \centering
         \includegraphics[width=\textwidth, height=5cm]{Pictures/Photos/road_campus.jpg}
         \caption{Smooth terrain (Asphalt road)}
         \label{subfig:road_campus}
     \end{subfigure}
-    
     \caption{Representative photographs of the five Initial Development terrain classes.}
     \label{fig:main_terrain_photos}
 \end{figure}
 
-\newpage
-For the comparison against the Farm-trained models, the Initial Development data is restricted to a three-class subset containing \texttt{smooth\_terrain}, \texttt{grass}, and \texttt{dry\_dirt\_track}; \texttt{muddy\_dirt\_track} and \texttt{cobblestone} are dropped. This matches the class cardinality of the Main Agricultural dataset ($K = 3$) so that the two classification problems share an identical chance-level baseline and can be compared at the level of macro-F1 without the confound that a five-class problem is intrinsically harder than a three-class one. The two dropped classes are also the weakest candidates for retention: \texttt{cobblestone} has no analogue at the agricultural site, and \texttt{muddy\_dirt\_track} was recorded under transient weather conditions that conflate surface composition with moisture state and yields the smallest sample count after windowing. The retained three labels span the same or a close coarse roughness spectrum (smooth, vegetated, unpaved compacted) that the Farm \texttt{grass}\,/\,\texttt{dirt\_track}\,/\,\texttt{soil} scheme covers, so the two parallel three-class problems are discussed side-by-side in \Cref{ch:results} as comparable-difficulty reference points rather than as a strict train-on-campus / test-on-farm transfer task. All notebooks suffixed with \texttt{\_3class} (\texttt{07a}\,/\,\texttt{07b}\,/\,\texttt{08b}\,/\,\texttt{09b}\,/\,\texttt{10b}) operate exclusively on this reduced subset.
+For the comparison against the Farm-trained models, the Initial Development data is restricted to a three-class subset containing \texttt{smooth\_terrain}, \texttt{grass} and \texttt{dry\_dirt\_track}; \texttt{muddy\_dirt\_track} and \texttt{cobblestone} are dropped. This matches the class cardinality of the Main Agricultural dataset ($K = 3$) so that the two problems share an identical chance-level baseline and can be compared at the macro-F1 level without the confound that a five-class problem is intrinsically harder than a three-class one. The two dropped classes are also the weakest candidates for retention: \texttt{cobblestone} has no farm analogue, and \texttt{muddy\_dirt\_track} conflates surface composition with transient weather conditions and has the smallest sample count after windowing. The retained three labels span a coarse roughness spectrum (smooth, vegetated, unpaved compacted) that closely matches the Farm \texttt{grass}\,/\,\texttt{dirt\_track}\,/\,\texttt{soil} scheme, so the two parallel three-class problems are discussed side-by-side in \Cref{ch:results} as comparable-difficulty reference points rather than as a strict train-on-campus / test-on-farm transfer task.
 
 \subsection{Labelling Procedure}
 
-All terrain labels were assigned manually after each session. During every run a continuous video recording of the robot's path was made from a hand-held camera following alongside, so that each terrain transition along the route was captured visually. After the run, the video was reviewed offline and synchronised to the robot's logs by matching a small number of identifiable events (run start, deliberate stops at terrain boundaries) between the video timestamp and the Unix-epoch timestamps in the sensor logs. With that mapping fixed, each visible terrain transition in the video was converted to its corresponding Unix time, and the final $[t_{\text{start}}, t_{\text{end}}]$ ranges for each class were stored in a per-run JSON configuration file (\texttt{labels\_config.json}). \Cref{lst:labels_json} gives a representative example from \texttt{Farm/Run1}.
+All terrain labels were assigned manually after each session. During every run a continuous video recording of the robot's path was made from a hand-held camera following alongside, so that each terrain transition was captured visually. After the run, the video was reviewed offline and synchronised to the robot's logs by matching a small number of identifiable events (run start, deliberate stops at terrain boundaries) between the video and the Unix-epoch timestamps in the sensor logs. With that mapping fixed, each visible terrain transition was converted to its corresponding Unix time, and the final $[t_{\text{start}}, t_{\text{end}}]$ ranges for each class were stored in a per-run JSON configuration file (\texttt{labels\_config.json}). \Cref{lst:labels_json} gives a representative example from \texttt{Farm/Run1}.
 
 \begin{lstlisting}[language=, caption={Example label configuration (\texttt{labels\_config.json}).}, label={lst:labels_json}]
 {
@@ -213,4 +206,4 @@ All terrain labels were assigned manually after each session. During every run a
 
 Time ranges are absolute Unix epoch seconds matching the timestamp column of the raw log files. Each $[t_{\text{start}}, t_{\text{end}}]$ pair defines a contiguous interval during which the robot was confidently driving on a single terrain type; unlabelled regions (turns, robot stops, ambiguous transitions, or short periods in which the surface could not be identified from the video) are discarded during preprocessing rather than being assigned to a catch-all class.
 
-This labelling scheme is intentionally conservative: it sacrifices a fraction of the recorded data in exchange for cleaner per-window class assignments downstream. Because every window inherits its label from the time range of its mid-point, conservative ranges also prevent transition samples from being silently mixed into a single class --- the dynamics of explicit terrain transitions are studied separately in \Cref{sec:transition_cusum}.
+This labelling scheme is intentionally conservative: it sacrifices a fraction of the recorded data in exchange for cleaner per-window class assignments downstream. Because every window inherits its label from the time range of its mid-point, conservative ranges also prevent transition samples from being silently mixed into a single class; the dynamics of explicit terrain transitions are studied separately in \Cref{sec:bg-transition}.

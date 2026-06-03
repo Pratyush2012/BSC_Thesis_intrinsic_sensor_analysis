@@ -82,8 +82,7 @@ Wheel-encoder velocities are read by the Teensy microcontroller and forwarded to
 
 \section{Data Acquisition Setup}
 
-All sensor streams are recorded simultaneously on the on-board Raspberry~Pi. A run begins when the robot is powered on and the logging service starts, and ends when the robot is powered off, or manually cut-off; each run produces a directory named \texttt{log\_YYYYMMDD\_HHMMSS.xxx}, where the suffix encodes the logger start time to millisecond resolution and all log files share a common run-relative timeline. A typical run directory layout is shown
-in \Cref{lst:run_dir}.
+All sensor streams are recorded simultaneously on the on-board Raspberry~Pi. A run begins when the robot is powered on and the logging service starts, and ends when the robot is powered off, or manually cut-off; each run produces a directory as \texttt{log\_YYYYMMDD\_HHMMSS\allowbreak .xxx}, where the suffix encodes the logger start time to millisecond resolution and all files share a common run-relative timeline. A typical run directory layout is shown in \Cref{lst:run_dir}.
 
 \begin{lstlisting}[language=, caption={Layout of one raw run directory.}, label={lst:run_dir}]
 log_20260421_113423.000/

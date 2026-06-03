@@ -164,12 +164,9 @@ The top features by mutual information are dominated by the gyroscope pitch and 
 
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/features/Farm/dataset\_B/mutual\_information.png}.
-    Shows the top 30 features ranked by mutual information against
-    the terrain label on the farm dataset (no-speed variant).}
+    \includegraphics[width=0.95\textwidth]{Pictures/Figures/mutual_information.png}
     \caption{Top-30 features ranked by mutual information with the
-    terrain label on the farm dataset (no-speed variant).
+    terrain label on the farm dataset.
     Gyroscope pitch and roll dynamical and frequency-band statistics,
     together with vertical-accelerometer band-power, dominate the
     leading ranks.}
@@ -190,10 +187,7 @@ The threshold $\rho_{\max} = 0.95$ is conservative: it removes only features tha
 
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/features/Farm/dataset\_B/corr\_heatmap.png}.
-    Pearson correlation heatmap of the top-25 most variable features
-    after pruning.}
+    \includegraphics[width=0.95\textwidth]{Pictures/Figures/corr_heatmap.png}
     \caption{Pearson correlation heatmap of the top-25 most variable
     features in the farm dataset after MI ranking and correlation
     pruning.}
@@ -206,10 +200,19 @@ To verify that the engineered features carry discriminative information beyond w
 
 \begin{figure}[H]
     \centering
-    \placeholder{Two side-by-side panels:
-    (a) \texttt{reports/features/Farm/dataset\_B/pca\_2d.png},
-    (b) \texttt{reports/features/Farm/dataset\_B/tsne\_2d.png}.
-    Both should be colour-coded by terrain class.}
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Figures/pca_2d.png}
+        \caption{PCA}
+        \label{subfig:grass}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=5cm]{Pictures/Figures/tsne_2d.png}
+        \caption{t-SNE 2D}
+        \label{subfig:dirt}
+    \end{subfigure}
     \caption{Low-dimensional embeddings of the pruned farm feature
     table, coloured by terrain class. PCA (left) shows overall
     global structure; t-SNE (right) reveals finer class clustering.
