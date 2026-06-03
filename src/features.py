@@ -1,25 +1,9 @@
 """
 features.py — Terrain classification feature engineering for wheeled robot IMU data.
-
 Physical axis convention (hardcoded throughout):
-    Accelerometer
-        ax  →  left / right  (lateral)
-        ay  →  up   / down   (vertical, gravity axis — raw ay ≈ −1.0 g at rest)
-        az  →  front/ back   (longitudinal)
+    Accelerometer:ax→left/right(lateral), ay→up/down(vertical, gravity axis—raw ay ≈ −1.0 g at rest), az→front/back(longitudinal)
 
-    Gyroscope
-        gx  →  pitch  (nose-up / nose-down rotation around the left-right axis)
-        gy  →  yaw    (turning left / right around the up-down axis)
-        gz  →  roll   (tilting left / right around the front-back axis)
-
-Gravity removal:
-    The per-window DC mean is subtracted from ALL three accelerometer axes.
-    This removes the ~−1 g offset on ay and any residual DC bias on ax / az,
-    leaving only dynamic (terrain-driven) acceleration in every axis.
-
-Terrain classes in this project:
-    dry_dirt_track | grass | muddy_dirt_track | smooth_terrain
-
+    Gyroscope: gx→pitch(nose-up / nose-down rotation around the left-right axis), gy→yaw (turning left / right around the up-down axis), gz→roll (tilting left / right around the front-back axis)
 Public API
 ----------
     compute_window_features(windows_df, signals_df, ...) → features_df
@@ -44,7 +28,7 @@ from sklearn.feature_selection import mutual_info_classif
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
-# ── Column name constants ────────────────────────────────────────────────────
+# Column name constants
 ACC_COLS  = ["ax", "ay", "az"]
 GYRO_COLS = ["gx", "gz"]  # gy (yaw) excluded — encodes turning, not terrain
 IMU_COLS  = ACC_COLS + GYRO_COLS
@@ -76,7 +60,7 @@ LOG_TRANSFORM_CANDIDATES = [
 ]
 
 
-# ── Internal helpers ─────────────────────────────────────────────────────────
+#  Internal helpers 
 
 def _require_seaborn():
     try:
@@ -84,18 +68,15 @@ def _require_seaborn():
     except ImportError as exc:
         raise ImportError("Plotting functions require seaborn. pip install seaborn.") from exc
 
-
 def _as_float(x) -> np.ndarray:
     """Convert any array-like to a 1-D float64 numpy array."""
     arr = np.asarray(x, dtype=float)
     return arr.ravel() if arr.ndim != 1 else arr
 
-
 def _check_columns(df: pd.DataFrame, required: list[str], df_name: str) -> None:
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise KeyError(f"Missing columns in {df_name}: {missing}")
-
 
 def _trapz(y: np.ndarray, x: np.ndarray) -> float:
     """Version-safe trapezoidal integration for NumPy releases with/without trapezoid."""
@@ -104,7 +85,7 @@ def _trapz(y: np.ndarray, x: np.ndarray) -> float:
     return float(np.trapz(y, x))
 
 
-# ── Low-level signal feature functions ──────────────────────────────────────
+# Low-level signal feature functions 
 
 def zero_crossing_rate(x) -> float:
     """Fraction of adjacent-sample sign changes (normalised to [0, 1])."""
@@ -119,7 +100,6 @@ def zero_crossing_rate(x) -> float:
     crossings = int(np.sum(signs[1:] * signs[:-1] < 0))
     return crossings / (len(arr) - 1)
 
-
 def safe_pearson(x: np.ndarray, y: np.ndarray) -> float:
     """Pearson correlation; returns 0.0 when either signal is constant."""
     if len(x) < 2 or len(y) < 2:
@@ -128,11 +108,9 @@ def safe_pearson(x: np.ndarray, y: np.ndarray) -> float:
         return 0.0
     return float(np.corrcoef(x, y)[0, 1])
 
-
 def band_power(x, fs: int, f_low: float, f_high: float) -> float:
     """
-    FFT-based power in the frequency band [f_low, f_high] Hz.
-    Signal is DC-removed before the FFT.
+    FFT-based power in the frequency band [f_low, f_high] Hz. Signal is DC-removed before the FFT.
     """
     arr = _as_float(x)
     if len(arr) < 2:
@@ -143,7 +121,6 @@ def band_power(x, fs: int, f_low: float, f_high: float) -> float:
     psd    = (np.abs(np.fft.rfft(arr_dc)) ** 2) / n
     mask   = (freqs >= f_low) & (freqs <= f_high)
     return _trapz(psd[mask], freqs[mask]) if np.any(mask) else 0.0
-
 
 def spectral_features(x, fs: int) -> dict[str, float]:
     """
@@ -160,7 +137,6 @@ def spectral_features(x, fs: int) -> dict[str, float]:
     )
     if len(arr) < 2:
         return nan_result
-
     arr_dc = arr - arr.mean()
     n      = len(arr_dc)
     freqs  = np.fft.rfftfreq(n, d=1.0 / fs)
@@ -172,24 +148,18 @@ def spectral_features(x, fs: int) -> dict[str, float]:
     if len(pp) == 0 or pp.sum() <= 0:
         return dict(spectral_energy=total, dominant_freq=np.nan,
                     spectral_centroid=np.nan, spectral_entropy=np.nan)
-
     dominant  = float(fp[np.argmax(pp)])
     centroid  = float(np.sum(fp * pp) / np.sum(pp))
     p_norm    = pp / pp.sum()
     with np.errstate(divide="ignore", invalid="ignore"):
         log_p = np.where(p_norm > 0, np.log2(p_norm), 0.0)
     entropy = float(-np.sum(p_norm * log_p))
-
     return dict(spectral_energy=total, dominant_freq=dominant,
                 spectral_centroid=centroid, spectral_entropy=entropy)
 
-
 def time_domain_features(x) -> dict[str, float]:
     """
-    Statistical and energy time-domain features:
-        mean, std, min, max, range, median, iqr,
-        skewness, kurtosis, zero_crossing_rate,
-        rms, energy, mean_abs
+    Statistical and energy time-domain features
     """
     arr = _as_float(x)
     if len(arr) == 0:
@@ -215,18 +185,15 @@ def time_domain_features(x) -> dict[str, float]:
         "mean_abs":           float(np.mean(np.abs(arr))),
     }
 
-
 def jerk_rms(x, fs: int) -> float:
     """
-    RMS of the jerk signal (first difference × fs).
-    Jerk captures abrupt changes in acceleration — high on rough terrain.
+    RMS of the jerk signal (first difference × fs). Jerk captures abrupt changes in acceleration — high on rough terrain.
     """
     arr = _as_float(x)
     if len(arr) < 2:
         return np.nan
     j = np.diff(arr) * fs
     return float(np.sqrt(np.mean(j ** 2)))
-
 
 def hjorth_params(x) -> dict[str, float]:
     """
@@ -239,7 +206,6 @@ def hjorth_params(x) -> dict[str, float]:
     nan_out = dict(hjorth_activity=np.nan, hjorth_mobility=np.nan, hjorth_complexity=np.nan)
     if len(arr) < 3:
         return nan_out
-
     var_x   = float(np.var(arr))
     std_x   = float(np.std(arr))
     d1      = np.diff(arr)
@@ -248,27 +214,22 @@ def hjorth_params(x) -> dict[str, float]:
 
     if std_x < 1e-12:
         return dict(hjorth_activity=activity, hjorth_mobility=0.0, hjorth_complexity=0.0)
-
     mobility = std_d1 / std_x
-
     if len(d1) < 2 or std_d1 < 1e-12:
         complexity = 0.0
     else:
         std_d2    = float(np.std(np.diff(d1)))
         mob_d1    = std_d2 / std_d1
         complexity = mob_d1 / mobility if mobility > 1e-12 else 0.0
-
     return dict(
         hjorth_activity=activity,
         hjorth_mobility=float(mobility),
         hjorth_complexity=float(complexity),
     )
 
-
 def _per_axis_features(sig: np.ndarray, fs: int, bands: list) -> dict[str, float]:
     """
-    Full per-axis feature vector:
-        time-domain + FFT spectral + band-power + Hjorth + jerk_rms
+    Full per-axis feature vector: time-domain + FFT spectral + band-power + Hjorth + jerk_rms
     """
     out = {**time_domain_features(sig), **spectral_features(sig, fs)}
     for f_low, f_high, suffix in bands:
@@ -278,7 +239,7 @@ def _per_axis_features(sig: np.ndarray, fs: int, bands: list) -> dict[str, float
     return out
 
 
-# ── Main feature extraction ──────────────────────────────────────────────────
+# Main feature extraction
 
 def compute_window_features(
     windows_df: pd.DataFrame,
@@ -291,35 +252,24 @@ def compute_window_features(
     """
     Compute the full window-level feature table from raw IMU signals.
 
-    Parameters
-    ----------
-    windows_df  : window metadata — must contain:
-                      window_id, run_id, segment_id, label, t_start, t_end
-    signals_df  : raw signal rows — must contain:
-                      run_id, t_rel, ax, ay, az, gx, gy, gz
-                  and optionally the velocity column (vel_col).
+    Parameters:
+    windows_df  : window metadata — must contain: window_id, run_id, segment_id, label, t_start, t_end
+    signals_df  : raw signal rows — must contain: run_id, t_rel, ax, ay, az, gx, gy, gz and optionally the velocity column (vel_col).
     sample_rate : sensor sampling rate in Hz (default 100).
-    bands       : list of (f_low, f_high, label) tuples for band-power.
-                  Defaults to DEFAULT_BANDS.
+    bands       : list of (f_low, f_high, label) tuples for band-power. Defaults to DEFAULT_BANDS.
     id_cols     : metadata columns excluded from feature list.
-    vel_col     : velocity column in signals_df for odometry features.
-                  Set to None to skip.
+    vel_col     : velocity column in signals_df for odometry features. Set to None to skip.
 
-    Feature groups computed
-    -----------------------
+    Feature groups computed:
     Per IMU axis (ax, ay, az, gx, gz) and magnitude (acc_mag, gyro_mag):
-        - Time domain:  mean, std, min, max, range, median, iqr, skewness,
-                        kurtosis, zero_crossing_rate, rms, energy, mean_abs
-        - Spectral:     spectral_energy, dominant_freq, spectral_centroid,
-                        spectral_entropy
-        - Band-power:   bandpower_1_5Hz, bandpower_5_20Hz, bandpower_20_40Hz,
-                        bandpower_40_80Hz
+        - Time domain:  mean, std, min, max, range, median, iqr, skewness, kurtosis, zero_crossing_rate, rms, energy, mean_abs
+        - Spectral:     spectral_energy, dominant_freq, spectral_centroid, spectral_entropy
+        - Band-power:   bandpower_1_5Hz, bandpower_5_20Hz, bandpower_20_40Hz, bandpower_40_80Hz
         - Hjorth:       hjorth_activity, hjorth_mobility, hjorth_complexity
         - Jerk:         jerk_rms
 
     Within-sensor correlations:
-        acc:  corr_xy (lateral-vertical), corr_xz (lateral-longitudinal),
-              corr_yz (vertical-longitudinal)
+        acc:  corr_xy (lateral-vertical), corr_xz (lateral-longitudinal), corr_yz (vertical-longitudinal)
         gyro: corr_xz (pitch-roll)
 
     Cross-sensor correlations (IMU coupling — terrain discriminative):
@@ -328,41 +278,31 @@ def compute_window_features(
         az vs gx — longitudinal acc × pitch (going over bumps)
         ax vs gz — lateral acc × roll       (side-to-side tipping)
 
-    Odometry (when vel_col is present):
-        odom_mean_speed, odom_speed_std, odom_distance
+    Odometry (when vel_col is present): odom_mean_speed, odom_speed_std, odom_distance
 
-    Gravity / DC removal
-    --------------------
-    The per-window mean is subtracted from ax, ay, and az before any feature
-    computation.  This removes the ≈ −1 g DC offset on ay (vertical / gravity
-    axis) and any residual bias on the other axes, leaving only dynamic
-    (terrain-driven) acceleration.
+    Gravity / DC removal:
+    The per-window mean is subtracted from ax, ay, and az before any feature computation.  This removes the ≈ −1 g DC offset on ay (vertical / gravity
+    axis) and any residual bias on the other axes, leaving only dynamic (terrain-driven) acceleration.
 
-    Gyroscope feature policy
-    ------------------------
-    gy (yaw rate) is intentionally excluded from engineered features because it
-    primarily reflects steering/turning behavior (a motion confound) rather
-    than terrain response.  Accordingly, gyro magnitude is computed from
-    pitch+roll only: sqrt(gx^2 + gz^2).
+    Gyroscope feature policy:
+    gy (yaw rate) is intentionally excluded from engineered features because it primarily reflects steering/turning behavior (a motion confound) rather
+    than terrain response.  Accordingly, gyro magnitude is computed from pitch+roll only: sqrt(gx^2 + gz^2).
     """
     if bands is None:
         bands = DEFAULT_BANDS
     if id_cols is None:
         id_cols = DEFAULT_ID_COLS
-
     _check_columns(signals_df, ["run_id", "t_rel"] + IMU_COLS, "signals_df")
     _check_columns(
         windows_df,
         ["window_id", "run_id", "segment_id", "label", "t_start", "t_end"],
         "windows_df",
     )
-
     has_odom = vel_col is not None and vel_col in signals_df.columns
     if vel_col is not None and not has_odom:
         print(f"[WARNING] vel_col='{vel_col}' not found in signals_df — odometry features skipped.")
 
     rows = []
-
     for _, w in windows_df.iterrows():
         run_id          = w["run_id"]
         t_start, t_end  = float(w["t_start"]), float(w["t_end"])
@@ -375,15 +315,13 @@ def compute_window_features(
         ]
         if seg.empty:
             continue
-
-        # ── Gravity / DC removal ─────────────────────────────────────────
+        # Gravity / DC removal
         # Subtract per-window mean from every accelerometer axis.
         # ay  → removes ≈ −1 g gravity component
         # ax, az → removes any residual DC bias
         acc_raw      = seg[ACC_COLS].to_numpy(dtype=float)
         acc_centered = acc_raw - acc_raw.mean(axis=0, keepdims=True)
         ax_s, ay_s, az_s = acc_centered[:, 0], acc_centered[:, 1], acc_centered[:, 2]
-
         # Raw gyro signals (no DC removal needed — gyro reads angular rate, not offset)
         gx_s = seg["gx"].to_numpy(dtype=float)
         gz_s = seg["gz"].to_numpy(dtype=float)
@@ -397,19 +335,15 @@ def compute_window_features(
             "t_end":      t_end,
             "n_samples":  int(len(seg)),
         }
-
-        # ── Per-axis accelerometer features ─────────────────────────────
+        # Per-axis accelerometer features
         for col, sig in zip(ACC_COLS, [ax_s, ay_s, az_s]):
             for k, v in _per_axis_features(sig, sample_rate, bands).items():
                 row[f"{col}_{k}"] = v
-
-        # ── Per-axis gyroscope features ──────────────────────────────────
+        # Per-axis gyroscope features
         for col, sig in zip(GYRO_COLS, [gx_s, gz_s]):
             for k, v in _per_axis_features(sig, sample_rate, bands).items():
                 row[f"{col}_{k}"] = v
-
-        # ── Magnitude vector features ─────────────────────────────────
-        # ||acc||  and  ||gyro||  capture overall vibration intensity
+        # Magnitude vector features ||acc||  and  ||gyro||  capture overall vibration intensity
         acc_mag  = np.sqrt(ax_s**2 + ay_s**2 + az_s**2)
         gyro_mag = np.sqrt(gx_s**2 + gz_s**2)
 
@@ -417,36 +351,29 @@ def compute_window_features(
             for k, v in _per_axis_features(sig, sample_rate, bands).items():
                 row[f"{prefix}_{k}"] = v
 
-        # ── Within-sensor correlations ────────────────────────────────
+        # Within-sensor correlations
         # Accelerometer
         row["acc_corr_xy"] = safe_pearson(ax_s, ay_s)  # lateral  × vertical
         row["acc_corr_xz"] = safe_pearson(ax_s, az_s)  # lateral  × longitudinal
         row["acc_corr_yz"] = safe_pearson(ay_s, az_s)  # vertical × longitudinal
-
         # Gyroscope (terrain-driven axes only)
         row["gyro_corr_xz"] = safe_pearson(gx_s, gz_s)  # pitch × roll
 
-        # ── Cross-sensor correlations ─────────────────────────────────
-        # These capture coupling between linear and rotational motion —
-        # patterns that change with terrain type.
+        # Cross-sensor correlations
+        # These capture coupling between linear and rotational motion — patterns that change with terrain type.
         #
-        #  ay × gx : vertical bounce × pitch
-        #            High on soft/muddy terrain where the nose dips in.
+        #  ay × gx : vertical bounce × pitch. High on soft/muddy terrain where the nose dips in.
         #
-        #  ay × gz : vertical bounce × roll
-        #            High when left/right wheels sink unevenly (mud, ruts).
+        #  ay × gz : vertical bounce × roll. High when left/right wheels sink unevenly (mud, ruts).
         #
-        #  az × gx : longitudinal acc × pitch
-        #            High when robot crests bumps (dirt track features).
+        #  az × gx : longitudinal acc × pitch. High when robot crests bumps (dirt track features).
         #
-        #  ax × gz : lateral acc × roll
-        #            High on cambered or side-sloped surfaces.
+        #  ax × gz : lateral acc × roll. High on cambered or side-sloped surfaces.
         row["cross_ay_gx"] = safe_pearson(ay_s, gx_s)
         row["cross_ay_gz"] = safe_pearson(ay_s, gz_s)
         row["cross_az_gx"] = safe_pearson(az_s, gx_s)
         row["cross_ax_gz"] = safe_pearson(ax_s, gz_s)
-
-        # ── Odometry features ─────────────────────────────────────────
+        # Odometry features
         if has_odom:
             vel = seg[vel_col].to_numpy(dtype=float)
             row["odom_mean_speed"] = float(vel.mean())
@@ -454,26 +381,22 @@ def compute_window_features(
             row["odom_distance"]   = float(np.abs(vel).sum() / sample_rate)
 
         rows.append(row)
-
     if not rows:
         raise RuntimeError(
             "No features were generated. "
             "Check that window t_start/t_end ranges overlap with signals_df t_rel values."
         )
-
     features_df = (
         pd.DataFrame(rows)
         .sort_values("window_id")
         .reset_index(drop=True)
     )
-
     # Reorder: id_cols first, then feature columns
     feat_cols = [c for c in features_df.columns if c not in id_cols]
     return features_df[id_cols + feat_cols]
 
 
-# ── Feature column helpers ───────────────────────────────────────────────────
-
+# Feature column helpers
 def get_feature_columns(
     features_df: pd.DataFrame,
     id_cols: list[str] | None = None,
@@ -483,15 +406,12 @@ def get_feature_columns(
         id_cols = DEFAULT_ID_COLS
     return [c for c in features_df.columns if c not in id_cols]
 
-
 def get_eda_feature_columns(
     features_df: pd.DataFrame,
     id_cols: list[str] | None = None,
 ) -> list[str]:
     """
-    Return a reduced feature subset suitable for EDA visualisations.
-    Drops the noisiest / most redundant features (min, max, range, median,
-    iqr, skewness, ZCR, 40-80 Hz bandpower) to keep plots readable.
+    Return a reduced feature subset suitable for EDA visualisations. Drops the noisiest / most redundant features to keep plots readable.
     """
     all_feats = get_feature_columns(features_df, id_cols)
     drop_tokens = [
@@ -505,8 +425,7 @@ def get_eda_feature_columns(
     return [c for c in all_feats if not any(t in c for t in drop_tokens)]
 
 
-# ── Velocity-regime splitting ────────────────────────────────────────────────
-
+# Velocity-regime splitting
 def split_velocity_regime_datasets(
     df: pd.DataFrame,
     vel_col: str = "odom_mean_speed",
@@ -520,12 +439,7 @@ def split_velocity_regime_datasets(
         Dataset A — all windows (full diversity of speeds and conditions)
         Dataset B — low, near-constant-speed windows only
 
-    Dataset B is a speed-controlled subset that isolates terrain signal from
-    velocity-induced vibration, making terrain features more comparable across
-    terrain types.
-
-    Parameters
-    ----------
+    Parameters:
     vel_col      : per-window mean speed column (produced by compute_window_features).
     mean_thresh  : max mean speed for Dataset B (m/s).
     std_thresh   : max speed std for Dataset B (enforces near-constant speed).
@@ -535,7 +449,6 @@ def split_velocity_regime_datasets(
     has_speed_std = "odom_speed_std" in df.columns
     if not has_speed_std and verbose:
         print("[WARNING] 'odom_speed_std' not found; applying Dataset B filter using mean speed only.")
-
     dataset_A = df.copy()
     if has_speed_std:
         mask = (df[vel_col] < mean_thresh) & (df["odom_speed_std"] < std_thresh)
@@ -547,13 +460,11 @@ def split_velocity_regime_datasets(
         n_total = len(df)
         n_kept  = len(dataset_B)
         sep     = "=" * 62
-
         print(sep)
         print("DATASET A — All windows")
         print(sep)
         print(f"  Total windows : {n_total}")
         _print_label_dist(dataset_A, label_col, n_total)
-
         print()
         print(sep)
         print(f"DATASET B — Speed-controlled subset")
@@ -575,7 +486,6 @@ def split_velocity_regime_datasets(
 
     return dataset_A, dataset_B
 
-
 def _print_label_dist(df: pd.DataFrame, label_col: str, total: int) -> None:
     print("  Class distribution:")
     for cls, cnt in df[label_col].value_counts().sort_index().items():
@@ -583,16 +493,14 @@ def _print_label_dist(df: pd.DataFrame, label_col: str, total: int) -> None:
         print(f"    {cls:<25} {cnt:>5}  ({cnt / total * 100:5.1f}%)  {bar}")
 
 
-# ── Transforms and feature selection ────────────────────────────────────────
-
+# Transforms and feature selection
 def apply_log_transform(
     df: pd.DataFrame,
     cols: list[str] | None = None,
     inplace: bool = False,
 ) -> pd.DataFrame:
     """
-    Apply log1p to heavy-tailed energy / band-power features.
-    Defaults to LOG_TRANSFORM_CANDIDATES that are present in df.
+    Apply log1p to heavy-tailed energy / band-power features. Defaults to LOG_TRANSFORM_CANDIDATES that are present in df.
     Always clips to ≥ 0 before transforming (negative values → 0 before log1p).
     """
     out = df if inplace else df.copy()
@@ -606,7 +514,6 @@ def apply_log_transform(
     if applied:
         print(f"[log1p transform] Applied to {len(applied)} columns.")
     return out
-
 
 def compute_mutual_information(
     features_df: pd.DataFrame,
@@ -622,11 +529,9 @@ def compute_mutual_information(
     """
     Compute mutual information (MI) between each feature and the terrain label.
 
-    Returns a DataFrame sorted by MI score descending.
-    Prints and optionally plots the top_n features.
+    Returns a DataFrame sorted by MI score descending. Prints and optionally plots the top_n features.
 
-    Note: run this on the training split only in your final ML pipeline
-    to avoid data leakage.  For exploratory use on the full dataset,
+    Note: run this on the training split only in the final ML pipeline to avoid data leakage.  For exploratory use on the full dataset,
     the leakage risk is low but worth keeping in mind.
     """
     if feature_cols is None:
@@ -660,7 +565,6 @@ def compute_mutual_information(
 
     return mi_df
 
-
 def drop_high_correlation_features(
     features_df: pd.DataFrame,
     feature_cols: list[str] | None = None,
@@ -668,11 +572,9 @@ def drop_high_correlation_features(
     id_cols: list[str] | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
     """
-    Remove one feature from each pair whose absolute Pearson correlation
-    exceeds `threshold`.  The feature with lower variance is dropped.
+    Remove one feature from each pair whose absolute Pearson correlation exceeds `threshold`.  The feature with lower variance is dropped.
 
-    Returns
-    -------
+    Returns:
     pruned_df : DataFrame with redundant columns removed.
     dropped   : sorted list of dropped column names.
     """
@@ -706,17 +608,14 @@ def drop_high_correlation_features(
 
     return pruned_df, dropped
 
-
-# ── Diagnostics ──────────────────────────────────────────────────────────────
-
+# Diagnostics
 def print_feature_diagnostics(
     features_df: pd.DataFrame,
     feature_cols: list[str] | None = None,
     label_col: str = "label",
 ) -> pd.DataFrame:
     """
-    Print a summary of the feature table and return a label-distribution DataFrame.
-    Highlights missing values and checks key separator features.
+    Print a summary of the feature table and return a label-distribution DataFrame. Highlights missing values and checks key separator features.
     """
     if feature_cols is None:
         feature_cols = get_feature_columns(features_df)
@@ -762,12 +661,11 @@ def print_feature_diagnostics(
     return summary
 
 
-# ── EDA visualisations ───────────────────────────────────────────────────────
+# EDA visualisations
 # Helper to syncronize the color of the histogram and violion plots
 def _build_class_color_map(sns, classes, palette) -> dict:
     colors = sns.color_palette(palette, n_colors=len(classes))
     return dict(zip(classes, colors))
-
 
 def plot_feature_distributions(
     features_df: pd.DataFrame,
@@ -796,11 +694,9 @@ def plot_feature_distributions(
     classes   = sorted(features_df[label_col].unique())
     class_to_color = _build_class_color_map(sns, classes, palette)
     out_files = []
-
     for feat in present:
         fig, axes = plt.subplots(1, 2, figsize=(14, 4))
         fig.suptitle(feat, fontsize=12, fontweight="bold")
-
         # Histogram
         axes[0].hist(
             [features_df.loc[features_df[label_col] == cls, feat].dropna() for cls in classes],
@@ -812,7 +708,6 @@ def plot_feature_distributions(
         axes[0].set_ylabel("Count")
         axes[0].set_title("Histogram by terrain class")
         axes[0].legend(fontsize=8)
-
         # Violin
         sns.violinplot(
             data=features_df, x=label_col, y=feat,
@@ -826,10 +721,8 @@ def plot_feature_distributions(
         fig.savefig(out_path, bbox_inches="tight", dpi=120)
         out_files.append(out_path)
         plt.show() if show else plt.close(fig)
-
     print(f"[plot_feature_distributions] Saved {len(out_files)} figures → {out_dir}")
     return out_files
-
 
 def plot_correlation_heatmap(
     features_df: pd.DataFrame,
@@ -845,7 +738,6 @@ def plot_correlation_heatmap(
     sns = _require_seaborn()
     if feature_cols is None:
         feature_cols = get_feature_columns(features_df)
-
     # Select top_n most variable features for the heatmap
     ranked      = features_df[feature_cols].std(numeric_only=True).sort_values(ascending=False)
     heatmap_cols = ranked.head(min(top_n, len(ranked))).index.tolist()
@@ -859,7 +751,6 @@ def plot_correlation_heatmap(
     ax.set_title(f"Pearson correlation — top {len(heatmap_cols)} variable features")
     fig.tight_layout()
     _maybe_save(fig, reports_dir, "corr_heatmap.png", show)
-
     # Build ranked pairs list
     cols  = corr.columns.tolist()
     pairs = [
@@ -877,7 +768,6 @@ def plot_correlation_heatmap(
     print(pairs_df[["feature_1", "feature_2", "corr"]].to_string(index=False))
     return pairs_df
 
-
 def plot_pca_tsne(
     features_df: pd.DataFrame,
     feature_cols: list[str] | None = None,
@@ -888,10 +778,8 @@ def plot_pca_tsne(
     show: bool = True,
 ) -> dict:
     """
-    PCA (2D) and t-SNE (2D) scatter plots coloured by terrain label.
-    t-SNE is computed on a stratified subsample (≤ tsne_sample_cap rows)
+    PCA (2D) and t-SNE (2D) scatter plots coloured by terrain label. t-SNE is computed on a stratified subsample (≤ tsne_sample_cap rows)
     for speed.
-
     Returns a dict with PCA explained variance stats and t-SNE sample count.
     """
     sns = _require_seaborn()
@@ -904,7 +792,7 @@ def plot_pca_tsne(
     )
     X_scaled = StandardScaler().fit_transform(X)
 
-    # ── PCA ─────────────────────────────────────────────────────────────────
+    # PCA
     pca   = PCA(n_components=2, random_state=random_state)
     X_pca = pca.fit_transform(X_scaled)
 
@@ -925,7 +813,7 @@ def plot_pca_tsne(
     _maybe_save(fig, reports_dir, "pca_2d.png", show)
     print(f"PCA explained variance: PC1={evr[0]:.3f}, PC2={evr[1]:.3f}, total={evr.sum():.3f}")
 
-    # ── t-SNE ────────────────────────────────────────────────────────────────
+    # t-SNE
     sample_df = _stratified_sample(features_df, label_col, tsne_sample_cap, random_state)
     tsne_X    = np.nan_to_num(
         sample_df[feature_cols].to_numpy(dtype=float),
@@ -955,7 +843,6 @@ def plot_pca_tsne(
         "pca_cumulative_variance":      float(evr.sum()),
         "n_tsne_samples":               int(len(tsne_X)),
     }
-
 
 def _stratified_sample(
     df: pd.DataFrame,
@@ -992,7 +879,6 @@ def _stratified_sample(
     sampled = sampled.sample(frac=1.0, random_state=random_state)
     return sampled.reset_index(drop=True)
 
-
 def _maybe_save(fig, reports_dir, filename: str, show: bool) -> None:
     if reports_dir is not None:
         p = Path(reports_dir)
@@ -1001,8 +887,7 @@ def _maybe_save(fig, reports_dir, filename: str, show: bool) -> None:
     plt.show() if show else plt.close(fig)
 
 
-# ── Full EDA pipeline ────────────────────────────────────────────────────────
-
+# Full EDA pipeline
 def run_feature_evaluation(
     features_df: pd.DataFrame,
     reports_dir: str | Path,
@@ -1021,7 +906,6 @@ def run_feature_evaluation(
         2. Distribution plots (histogram + violin per feature)
         3. Correlation heatmap + top pairs
         4. PCA and t-SNE projections
-
     Returns a dict with all results for downstream inspection.
     """
     if id_cols is None:
@@ -1041,7 +925,6 @@ def run_feature_evaluation(
         features_df, feature_cols, label_col, reports_dir,
         random_state, tsne_sample_cap, show,
     )
-
     return dict(
         label_summary    = label_summary,
         distribution_files = dist_files,

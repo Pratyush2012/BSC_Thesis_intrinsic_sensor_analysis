@@ -1,6 +1,6 @@
 """Shared evaluation utilities for terrain-classification notebooks.
 
-Centralises the five helper functions that were previously copy-pasted across
+Centralises the five helper functions that are used across
 07_baslines.ipynb, 07b_dataset_B_3class_baseline.ipynb, and 08_base_tuning.ipynb.
 """
 
