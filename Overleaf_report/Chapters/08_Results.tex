@@ -1,23 +1,26 @@
 \chapter{Results}
 \label{ch:results}
 
-This chapter reports the experimental outcomes of the classification pipeline described in \Cref{ch:classification}, evaluated under Leave-One-Run-Out cross-validation (LORO-CV, \Cref{sec:eval_protocol}) on three classification problems: the five-class campus development dataset (Dataset~A, \Cref{sec:initial_dev_dataset}), its three-class low-constant-speed subset (Dataset~B), and the primary three-class farm dataset (\Cref{sec:farm_dataset}). Headline figures of merit are the macro-averaged $F_1$ score and the robustness score $r = \overline{F_1^{\mathrm{macro}}} - 0.5\,\sigma_{F_1^{\mathrm{macro}}}$ defined in \Cref{eq:robustness}. \Cref{sec:res_campus,sec:res_farm} present the per-dataset findings. \Cref{sec:res_speed} isolates the velocity--vibration confound discussed in \Cref{sec:bg-vel} by comparing the multi-speed and low-speed campus subsets.\Cref{sec:res_models} cross-cuts the model families and adds the robustness diagnostics (sensor dropout, noise injection, cross-day variation, significance testing). \Cref{sec:res_transition} finally evaluates the sliding-window classifier as a transition detector, both with the implicit $n_{\text{stable}}$ stable-run rule and with the CUSUM detector whose formulation is given in \Cref{sec:bg-transition}.
+This chapter evaluates the classification pipeline of \Cref{ch:classification} under Leave-One-Run-Out cross-validation (LORO-CV, \Cref{sec:eval_protocol}) on four configurations: the five-class campus development dataset (Dataset~A, \Cref{sec:initial_dev_dataset}), its three-class restriction on the same multi-speed windows, the three-class low-constant-speed campus subset (Dataset~B), and the primary three-class farm dataset (\Cref{sec:farm_dataset}). Results are reported as macro-averaged $F_1$ with its $95\,\%$ confidence interval and worst-fold value across LORO folds; the robustness score $r = \overline{F_1^{\mathrm{macro}}} - 0.5\,\sigma_{F_1^{\mathrm{macro}}}$ (\Cref{eq:robustness}) is used only as a tie-breaker in the hyperparameter sweeps.
+
+\Cref{sec:res_campus,sec:res_farm} present the per-dataset headline findings; the velocity--vibration confound of \Cref{sec:bg-vel} is treated within \Cref{sec:res_campus} (the multi- vs.\ low-speed campus subsets) and \Cref{sec:res_models} (a speed-only feature ablation across all three datasets). \Cref{sec:res_models} also consolidates the cross-dataset robustness diagnostics (sensor dropout and noise injection), paired-Wilcoxon significance testing, the tuning and top-MI vs.\ all-features comparisons, and the campus-vs-farm shared-class gap. \Cref{sec:res_transition} finally evaluates the sliding-window classifier as a transition detector, with both the implicit $n_{\text{stable}}$ rule and the CUSUM detector of \Cref{sec:bg-transition}.
 
 \section{Test Dataset: Campus Development Route}
 \label{sec:res_campus}
 
-The campus dataset was recorded to develop the pipeline against varied outdoor surfaces before the farm campaign (\Cref{sec:initial_dev_dataset}). It is evaluated here in three nested configurations, each of which isolates a single source of difficulty:
+The campus dataset was recorded to develop the pipeline against varied outdoor surfaces before the farm campaign (\Cref{sec:initial_dev_dataset}). It is evaluated here in three nested configurations, each isolating a single source of difficulty:
 \begin{itemize}
-    \item \emph{Dataset~A (5-class)} --- all windows, all five labels (\texttt{grass}, \texttt{smooth\_terrain}, \texttt{dry\_dirt\allowbreak \_track}, \texttt{muddy\_dirt\_track}, \texttt{cobblestone}). The full multi-speed problem with the two rare classes still in place. All six classifier families (LR, RF, XGBoost, SVM, MLP, CNN) are evaluated.
-    \item \emph{Dataset~A (3-class)} --- the same multi-speed windows but restricted to the three classes that are well populated across every session (\texttt{grass}, \texttt{smooth\_terrain}, \texttt{dry\_\allowbreak dirt\_track}). Compared to the 5-class problem, this configuration changes \emph{only} the class set: the speed range and the windowing protocol are identical. Only the four classical baselines (LR, RF, XGBoost, SVM) are evaluated on this configuration, since it serves purely as a controlled comparison point for isolating the class-imbalance effect from the speed-regime effect.
-    \item \emph{Dataset~B (3-class)} --- the same three classes, further restricted to the low-constant-speed regime selected by \Cref{eq:dataset_B_mask}. Because the campus robot was already operated at a moderate speed most of the time, Dataset~B sits inside Dataset~A: more than $75\,\%$ of the 3-class Dataset~A windows already satisfy the speed mask. It also provides a more parallel comparison point with the farm dataset (\Cref{sec:res_farm}), since the class count and speed regime match. All six classifier families are evaluated.
+    \item \emph{Dataset~A (5-class)} --- all windows, all five labels (\texttt{grass}, \texttt{smooth\_terrain}, \texttt{dry\_dirt\allowbreak \_track}, \texttt{muddy\_dirt\_track}, \texttt{cobblestone}). The full multi-speed problem; all six classifier families (LR, RF, XGBoost, SVM, MLP, CNN) are evaluated.
+    \item \emph{Dataset~A (3-class)} --- the same multi-speed windows restricted to the three classes well populated across every session (\texttt{grass}, \texttt{smooth\_terrain}, \texttt{dry\_\allowbreak dirt\_track}). Only the label set differs from the 5-class problem; the speed range and windowing are identical. Only the four classical baselines (LR, RF, XGBoost, SVM) are evaluated, since this configuration serves purely as a controlled comparison point for isolating the class-imbalance effect from the speed-regime effect.
+    \item \emph{Dataset~B (3-class)} --- the same three classes further restricted to the low-constant-speed regime of \Cref{eq:dataset_B_mask}. Because the campus robot was already operated at moderate speed most of the time, roughly $70\,\%$ of the 3-class Dataset~A windows already satisfy the mask, so Dataset~B sits strictly inside Dataset~A. It also provides a parallel comparison point with the farm dataset (\Cref{sec:res_farm}), since the class count and speed regime match. All six classifier families are evaluated.
 \end{itemize}
 
-\paragraph{Dataset~A, 5 classes --- the full problem.} \Cref{tab:campus_master} lists the best configuration of each classifier family on the full five-class Dataset~A. The six families fall within a narrow $F_1^{\mathrm{macro}}$ band of $0.728$ (SVM) to $0.766$ (MLP), a spread of $\sim 0.04$ that is substantially smaller than the cross-fold standard deviation $\sigma_{F_1} \approx 0.12$--$0.15$ within each family. The paired Wilcoxon test on the per-fold scores (\Cref{fig:significance_campus}) returns no pair with $p < 0.05$, so no model family is statistically distinguishable from another at the $5\,\%$ level. The stratified-dummy baseline scores $0.20$ macro-$F_1$ against the $0.20$ chance level for five classes, confirming that the LORO splits do not themselves leak class structure. The cross-fold variance is itself driven mostly by the two rare classes discussed next.
+\paragraph{Dataset~A, 5 classes --- the full problem.} \Cref{tab:campus_master} lists the best configuration of each classifier family on Dataset~A. The six families fall within a narrow $F_1^{\mathrm{macro}}$ band of $0.728$ (SVM) to $0.766$ (MLP), a spread well below the within-family cross-fold standard deviation of $0.12$--$0.15$; the paired Wilcoxon test (\Cref{fig:significance_campus}) returns no pair with $p < 0.05$. The stratified dummy scores $0.20$ macro-$F_1$ against the $0.20$ chance level for five classes, confirming that the LORO splits do not themselves leak class structure. The cross-fold variance is driven mostly by the two rare classes discussed next.
 
+\vspace{-2mm}
 \begin{table}[H]
 \centering
-\caption{Best configuration of each classifier family on the five-class campus Dataset~A under LORO-CV. \texttt{Config} is the (feature-set, imbalance-handling) selection. The CNN consumes raw $5 \times 200$ windows and has no feature-set choice.} % Source: \texttt{results/Campus/master\_model\_comparison.csv}.}
+\caption{Best configuration of each classifier family on the five-class campus Dataset~A under LORO-CV. \texttt{Config} is the (feature-set, imbalance-handling) selection. The CNN consumes raw $5 \times 200$ windows and has no feature-set choice.}
 \label{tab:campus_master}
 \begin{tabular}{llccc}
 \toprule
@@ -35,64 +38,74 @@ Dummy (stratified) & ---                         & 0.201 & $\pm 0.031$ & 0.174 \
 \bottomrule
 \end{tabular}
 \end{table}
-
+\vspace{-6mm}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{Pictures/Figures/master_comparison_C5.png}
+    \includegraphics[width=0.8\textwidth]{Pictures/Figures/master_comparison_C5.png}
     \caption{Master model comparison on the five-class campus Dataset~A.}
     \label{fig:campus_master_bars}
 \end{figure}
 
-\paragraph{Per-class failures driven by class imbalance and route effects.} The aggregate $F_1 \approx 0.77$ headline number on Dataset~A is heavily diluted by two minority classes whose per-class scores collapse on the worst folds. \Cref{tab:campus_perclass} summarises the per-class XGBoost numbers; the picture is essentially the same for the other classical models. \texttt{Cobblestone} reaches only $F_1 = 0.33$, with one fold scoring $0.04$ and the other $0.62$. \texttt{Muddy\_dirt\_track} fares only marginally better, at $F_1 = 0.44$ with a high recall variance and a worst-fold value of $0.10$. The fold-quality diagnostic %TODO: ADD THE TABLE IN THE APPENDIX AND REFER TO THAT INSTEAD
-(\texttt{results/Campus/fold\_quality\_diagnostics.csv}) explains the collapse: both classes are recorded almost exclusively on a single session each (cobblestone on Run~B of the 9~March log and on the 26~March log; muddy dirt track on the two snowy February sessions), so when the dominant run becomes the test fold the model has essentially no training data for that class and has to predict the next-closest category. Speed conditioning aggravates the same problem: every speed-imbalanced minority class is flagged with a speed total-variation distance of $0.56$--$0.86$ between train and test in the diagnostic table. The behaviour is therefore not a model failure but a dataset-collection limitation, and is what motivates dropping the two classes in the next configuration.
+\vspace{-8mm}
+\paragraph{Per-class failures driven by class imbalance and route effects.} The $F_1 \approx 0.77$ headline is heavily diluted by two minority classes (as seen in \Cref{tab:window_counts}) whose per-class scores collapse on the worst folds. \Cref{tab:campus_perclass} reports per-class MLP numbers, representative of the other classical models: \texttt{cobblestone} reaches only $F_1 = 0.31$ (folds at $0.08$ and $0.55$), and \texttt{muddy\_dirt\_track} reaches $F_1 = 0.43$ with a high recall variance and worst-fold value of $0.17$. The fold-quality diagnostic (\Cref{tab:fold_quality_campus} ) explains the collapse: both classes are recorded almost exclusively on a single session each (cobblestone on Run~B of the 9~March log and on the 26~March log; muddy dirt track on the two snowy February sessions), so when the dominant run becomes the test fold the model has essentially no training data for that class. Speed conditioning compounds the problem: each minority class shows a train-test speed total-variation distance of $0.56$--$0.86$, visible in the per-class speed-bin distributions of \Cref{fig:speed_bins}: \texttt{muddy\_dirt\_track} and \texttt{smooth\_terrain} are recorded almost exclusively at high speed, while the other cluster at the operating speed. The behaviour is a dataset-collection limitation, not a model failure, and motivates dropping the two classes in the next configuration.
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{Pictures/Figures/speed_bins_campus.png}
+    \caption{Per-class speed distribution on the campus dataset. \texttt{muddy\_dirt\_track} and \texttt{smooth\_terrain} are concentrated in the high-speed band ($> 0.53\,\text{m/s}$), reached only during higher-speed traversal between terrain segments.}
+    \label{fig:speed_bins}
+\end{figure}
+
+\vspace{-8mm}
 \begin{table}[H]
 \centering
-\caption{Per-class XGBoost ($F_1$) on the five-class campus Dataset~A. \texttt{folds\_evaluated} is the number of folds in which the class appears in both train and test partitions.}
+\caption{Per-class MLP ($F_1$) on the five-class campus Dataset~A. \texttt{Folds} is the number of folds in which the class appears in both train and test partitions.}
 \label{tab:campus_perclass}
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Class} & $\overline{F_1}$ & $\sigma_{F_1}$ &
 \textbf{Worst} & \textbf{Folds} \\
 \midrule
-smooth\_terrain        & 0.947 & 0.026 & 0.912 & 5 \\
-dry\_dirt\_track       & 0.895 & 0.018 & 0.877 & 2 \\
-grass                  & 0.863 & 0.105 & 0.693 & 5 \\
-muddy\_dirt\_track     & 0.436 & 0.339 & 0.096 & 2 \\
-cobblestone            & 0.329 & 0.292 & 0.037 & 2 \\
+smooth\_terrain        & 0.959 & 0.037 & 0.916 & 5 \\
+dry\_dirt\_track       & 0.893 & 0.022 & 0.872 & 2 \\
+grass                  & 0.847 & 0.127 & 0.633 & 5 \\
+muddy\_dirt\_track     & 0.434 & 0.269 & 0.165 & 2 \\
+cobblestone            & 0.315 & 0.231 & 0.084 & 2 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
+\vspace{-6mm}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\textwidth]{Pictures/Figures/confusion_matrix_xgboost_all_C5.png}
-    \caption{Aggregated XGBoost confusion matrix on the five-class campus Dataset~A. The minority classes \texttt{cobblestone} and \texttt{muddy\_dirt\_track} are systematically confused with the larger-class neighbours of similar roughness.}
+    \includegraphics[width=0.75\textwidth]{Pictures/Figures/mlp_confusion_matrix_top_mi_aggregated.png}
+    \caption{Aggregated MLP confusion matrix on the campus Dataset~A: \texttt{cobblestone} and \texttt{muddy\_dirt\_track} are systematically confused with larger-class neighbours of similar roughness.}
     \label{fig:campus_cm_5class}
 \end{figure}
+\vspace{-8mm}
+\paragraph{Dataset~A, 3 classes --- isolating the class-imbalance effect.} \label{par:campus_a_3class} Re-running every classical classifier on the same multi-speed windows but with the two collapsing minority classes removed recovers a much higher headline. \Cref{tab:campus_A_3class} shows every classical model exceeds $F_1 = 0.95$ and reaches $0.96$--$0.98$ in its best configuration --- a $\sim 0.20$ macro-$F_1$ improvement over the 5-class problem on identical windows (\Cref{tab:campus_5cls_to_3cls_delta}). Since only the label set differs between the two rows of \Cref{tab:campus_5cls_to_3cls_delta}, this is the cleanest available estimate of how much of the 5-class difficulty is attributable to the two rare classes alone.
 
-\paragraph{Dataset~A, 3 classes --- isolating the class-imbalance effect.} \label{par:campus_a_3class} Re-running every classical classifier on the same multi-speed Dataset~A, but with the two collapsing minority classes removed, recovers a much higher headline performance. \Cref{tab:campus_A_3class} shows that every classical model now exceeds $F_1 = 0.94$ and reaches $0.96$--$0.97$ in its best configuration. The 5-class to 3-class delta on the \emph{same windows and the same speed range} is therefore $\sim 0.20$ macro-$F_1$ better for every model family (\Cref{tab:campus_5cls_to_3cls_delta}). This number is the cleanest available estimate of how much of the campus 5-class difficulty is attributable to the two rare classes alone: nothing about the model, the features or the speed regime has changed between the two rows of \Cref{tab:campus_5cls_to_3cls_delta}, only the label set.
-
+\vspace{-6mm}
 \begin{table}[H]
 \centering
-\caption{Best configuration of each classifier on the three-class campus Dataset~A.}% Source: \texttt{results/Campus/dataset\_A\_3class\_metrics\_summary.csv}.}
+\caption{Best configuration of each classical baseline on the three-class campus Dataset~A.}
 \label{tab:campus_A_3class}
 \begin{tabular}{llccc}
 \toprule
 \textbf{Model} & \textbf{Config} & $\overline{F_1}$ & 95\% CI &
 \textbf{Worst fold} \\
 \midrule
-LogisticRegression & \texttt{top\_mi, balanced}    & 0.974 & $\pm 0.018$ & 0.952 \\
-XGBoost            & \texttt{all, balanced}        & 0.968 & $\pm 0.029$ & 0.937 \\
-RandomForest       & \texttt{all, unweighted}      & 0.960 & $\pm 0.025$ & 0.928 \\
-SVM                & \texttt{top\_mi, balanced}    & 0.975 & $\pm 0.014$ & 0.956 \\
+SVM                & \texttt{top\_mi, balanced}    & 0.975 & $\pm 0.030$ & 0.956 \\
+LogisticRegression & \texttt{top\_mi, balanced}    & 0.974 & $\pm 0.029$ & 0.952 \\
+RandomForest       & \texttt{all, unweighted}      & 0.960 & $\pm 0.053$ & 0.920 \\
+XGBoost            & \texttt{all, balanced}        & 0.958 & $\pm 0.064$ & 0.909 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\vspace{-6mm}
 \begin{table}[H]
 \centering
-\caption{Effect of dropping the two minority classes from the campus dataset. Both rows use the same multi-speed windows and the same \texttt{balanced} configuration; only the label set differs.}% Source: \texttt{results/Campus/comparison\_3class\_vs\_5class\_multispeed.csv}.}
+\caption{Effect of dropping the two minority classes on identical multi-speed windows; only the label set differs (\texttt{balanced} configuration).}
 \label{tab:campus_5cls_to_3cls_delta}
 \begin{tabular}{lcccc}
 \toprule
@@ -105,14 +118,13 @@ SVM                & 0.727 & 0.946 & $+0.219$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+\vspace{-6mm}
+\paragraph{Dataset~B, 3 classes --- isolating the speed-regime effect.} Applying the low-constant-speed mask of \Cref{eq:dataset_B_mask} on top of the 3-class label set produces Dataset~B. Because roughly $70\,\%$ of the 3-class Dataset~A windows already satisfy the mask, any headline difference reflects the residual effect of removing the high-speed and accelerating windows. \Cref{tab:campus_A3_vs_B3} reports the paired A~$\to$~B comparison: every classical model gains $0.003$--$0.026$ macro-$F_1$ consistently in direction, with the worst-fold $F_1$ also improving. The gain is an order of magnitude smaller than the $\sim 0.20$ class-imbalance step, so class imbalance dominates the headline gap. Two caveats apply: the paired comparison only measures the marginal contribution of the $\sim 30\,\%$ of windows the mask removes, and the speed range on the campus logs is itself bounded by the session driving profiles. A stronger statement about the velocity--vibration confound (\Cref{sec:bg-vel}) would require a dedicated wide-speed-range experiment; from the present data the speed effect is minimal but present and consistent in direction at the sampled operating point.
 
-\paragraph{Dataset~B, 3 classes --- isolating the speed-regime effect.} Applying the low-constant-speed mask of \Cref{eq:dataset_B_mask} on top of the 3-class label set produces Dataset~B. Because more than $75\,\%$ of the 3-class Dataset~A windows already satisfy that mask, Dataset~B is a slight trim rather than a different dataset: any difference in the headline number is the residual effect of removing the high-speed and accelerating windows on an otherwise identical problem. \Cref{tab:campus_A3_vs_B3} reports the A~(3-class)~$\to$~B paired comparison: every classical model gains $0.005$--$0.026$ macro-$F_1$ in the low-speed regime, the direction of the gain is consistent across all four families, and the worst-fold $F_1$ also improves. The gain is, however, an order of magnitude smaller than the $\sim 0.20$ improvement from dropping the minority classes, so on this dataset the class-imbalance effect appears to contribute more to the headline gap than the speed regime does. This reading should be qualified, however: because Dataset~B contains the majority of the Dataset~A~(3-class) windows, the paired comparison only measures the marginal contribution of the $\sim 25\,\%$ of windows that the speed mask removes, and the speed range present on the campus logs is itself bounded by the driving profile of those sessions. A stronger statement about the velocity-vibration confound of \Cref{sec:bg-vel} would require a dedicated experiment recording the same surfaces over a deliberately wide speed range; from the present data alone, the safe conclusion is the weaker one that the speed effect is real, consistent in direction across model families, and small in magnitude at the operating point sampled here.
-
-\Cref{tab:campusB_master} lists the absolute Dataset~B numbers: every classifier family now exceeds $F_1 = 0.95$, with SVM and Logistic Regression reaching $0.986$ and $0.984$ respectively, and the fold-to-fold standard deviation drops by an order of magnitude relative to Dataset~A.
-
+\vspace{-4mm}
 \begin{table}[H]
 \centering
-\caption{Three-class campus problem at the multi-speed (Dataset~A) and low-constant-speed (Dataset~B) regimes, balanced configurations. $\Delta F_1$ = B $-$ A. Because Dataset~B is a strict subset of Dataset~A, this is a direct paired comparison of the speed-regime effect on an otherwise identical problem.}% Source: \texttt{results/Campus/dataset\_A\_3class\_vs\_B\_3class\_contextual\_comparison.csv}.}
+\caption{Three-class campus, multi-speed (A) vs.\ low-constant-speed (B), balanced configurations. $\Delta F_1$ = B $-$ A; direct paired comparison since B $\subset$ A.}
 \label{tab:campus_A3_vs_B3}
 \begin{tabular}{lccc}
 \toprule
@@ -126,9 +138,13 @@ XGBoost            & 0.958 & 0.979 & $+0.021$ \\
 \end{tabular}
 \end{table}
 
+\Cref{tab:campusB_master} lists the absolute Dataset~B numbers: every classifier family exceeds $F_1 = 0.95$, with SVM and LR at $0.986$ and $0.984$. These near-saturated numbers are an upper bound, not a deployment estimate: LORO measures cross-day rather than cross-route generalisation (runs sampled the same physical patches), and the mask preferentially retains the more stationary segments of each class (\Cref{ch:discussion}).
+
+
+\vspace{-4mm}
 \begin{table}[H]
 \centering
-\caption{Best configuration of each classifier family on the three-class campus Dataset~B.}% Source: \texttt{results/Campus\_dataset\_B\_3class/master\_model\_comparison.csv}.}
+\caption{Best configuration of each classifier on the three-class campus Dataset~B.}
 \label{tab:campusB_master}
 \begin{tabular}{llccc}
 \toprule
@@ -147,70 +163,34 @@ CNN                & raw signal (5\,ch)           & 0.952 & $\pm 0.081$ & 0.902 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\textwidth]{Pictures/Figures/confusion_matrix_svm_aggregated.png}
-    \caption{Aggregated SVM confusion matrix on the three-class campus Dataset~B. Off-diagonal mass is below $5\,\%$ in every cell, illustrating that the residual errors are not class-specific.}
+    \includegraphics[width=0.65\textwidth]{Pictures/Figures/confusion_matrix_svm_aggregated.png}
+    \caption{Aggregated SVM confusion matrix on the three-class campus Dataset~B. Off-diagonal mass is below $5\,\%$ in every cell, illustrating that the residual errors are evenly distributed rather than concentrated on a single class pair.}
     \label{fig:campusB_cm_3class}
 \end{figure}
 
+\vspace{-6mm}
 \begin{figure}[H]
     \centering
-    \placeholder{Insert a three-bar figure (one bar per dataset
-    configuration) showing macro-$F_1$ at A~(5-class), A~(3-class), B~(3-class)
-    for a representative classifier (e.g.\ XGBoost \texttt{balanced}). The
-    big step is between bars 1 and 2; bar 3 is only marginally higher than
-    bar 2. Data sources:
-    \texttt{master\_model\_comparison.csv},
-    \texttt{dataset\_A\_3class\_metrics\_summary.csv}, and
-    \texttt{Campus\_dataset\_B\_3class/master\_model\_comparison.csv}.}
-    \caption{Decomposition of the campus headline number: the
-    A~(5-class)~$\to$~A~(3-class) jump (class-imbalance effect) is roughly
-    ten times larger than the A~(3-class)~$\to$~B~(3-class) jump
-    (speed-regime effect).}
+    \includegraphics[width=0.65\textwidth]{Pictures/Figures/campus_decomposition_rf.png}
+    \caption{Decomposition of the campus headline number using Random Forest with a fixed configuration (\texttt{all} pruned features, unweighted loss) across the three nested dataset configurations. The A~(5-class)~$\to$~A~(3-class) jump (class-imbalance effect, $\Delta F_1 = +0.20$) is roughly ten times larger than the A~(3-class)~$\to$~B~(3-class) jump (speed-regime effect, $\Delta F_1 = +0.019$). Error bars are $95\,\%$ confidence intervals.}
     \label{fig:campus_decomposition}
 \end{figure}
-
+\vspace{-6mm}
 \paragraph{Reading the three configurations together.}
-The three-configuration sweep separates the two sources of headline
-improvement that were entangled in the 5-class~$\to$~B comparison. Dropping
-the minority classes is worth $\sim 0.20$ macro-$F_1$ on the same
-multi-speed windows; restricting to the low-constant-speed regime on top of
-that buys a further $\sim 0.01$--$0.026$. The Dataset~B headline of
-$F_1 = 0.98$ is therefore not a meaningful improvement of the method; it is
-a near-saturated reference point that says \emph{how easy a three-class
-campus problem becomes once the dataset itself is sufficient}. The farm
-dataset analysed next is the more realistic operating point, and the
-$\sim 0.12$ gap between the Dataset~B campus result and the farm result is
-attributable to the harder class structure of the farm
-(\texttt{grass}--\texttt{soil} confusion) rather than to a residual
-speed effect.
+The three-configuration sweep separates the two sources of headline improvement entangled in the 5-class~$\to$~B comparison. Dropping the minority classes is worth $\sim 0.20$ macro-$F_1$ on the same multi-speed windows; restricting to the low-constant-speed regime on top of that buys a further $0.003$--$0.026$, an order of magnitude smaller. \Cref{fig:campus_decomposition} visualises the decomposition with Random Forest \texttt{all, unweighted} held constant across the three datasets ($+0.20$ and $+0.019$). The farm dataset analysed next is the more realistic operating point; the $\sim 0.12$ gap between the Dataset~B and farm results is attributable to the harder class structure of the farm (\texttt{grass}--\texttt{soil} confusion) rather than to a residual speed effect.
 
 \section{Farm Dataset: Primary Classification Result}
 \label{sec:res_farm}
 
-The farm dataset is the primary target of this thesis: three terrain classes
-(\texttt{dirt\_track}, \texttt{grass}, \texttt{soil}) recorded across five
-runs on two field days under broadly consistent weather and at the
-intrinsically low and roughly constant speed at which the platform operates
-in production (\Cref{sec:farm_dataset}).
+The farm dataset is the primary target of this thesis: three terrain classes (\texttt{dirt\_track}, \texttt{grass}, \texttt{soil}) recorded across five runs on two field days at the low near-constant speed used in production (\Cref{sec:farm_dataset}).
 
 \paragraph{Headline performance.}
-\Cref{tab:farm_master} lists the best configuration of each classifier
-family. The three top classical baselines (SVM, Logistic~Regression,
-XGBoost) achieve $F_1 \approx 0.86$ and overlap within their $95\,\%$ CIs.
-The CNN, which sees only the raw five-channel windowed signal, comes within
-$\sim 0.02$ of the engineered-feature baselines despite a markedly larger
-cross-fold spread. The MLP and the random forest sit slightly behind. The
-paired Wilcoxon test
-(\Cref{fig:significance_farm}, source
-\texttt{results/Farm/significance\_pvalues.csv}) returns no model pair with
-$p < 0.05$, so the ordering in \Cref{tab:farm_master} is best read as a
-single $0.84$--$0.86$ macro-$F_1$ cluster rather than a strict ranking.
+\Cref{tab:farm_master} lists the best configuration of each classifier family. The three top classical baselines (SVM, LR, XGBoost) all reach $F_1 \approx 0.86$ within overlapping $95\,\%$ CIs; the CNN comes within $\sim 0.02$ on the raw five-channel signal but with a larger spread, and the MLP and random forest sit slightly behind. The paired Wilcoxon test (\Cref{fig:significance_farm}) returns no pair with $p < 0.05$, so \Cref{tab:farm_master} should be read as a single $0.84$--$0.87$ cluster. The stratified dummy at $0.32$ macro-$F_1$ matches the $0.33$ chance level for three classes, confirming the LORO splits do not leak class structure.
 
+\vspace{-4mm}
 \begin{table}[H]
 \centering
-\caption{Best configuration of each classifier family on the three-class
-farm dataset under LORO-CV. Source:
-\texttt{results/Farm/master\_model\_comparison.csv}.}
+\caption{Best configuration of each classifier family on the three-class farm dataset under LORO-CV.}
 \label{tab:farm_master}
 \begin{tabular}{llccc}
 \toprule
@@ -229,577 +209,151 @@ Dummy (stratified) & ---                        & 0.320 & $\pm 0.013$ & 0.305 \\
 \end{tabular}
 \end{table}
 
+\vspace{-3mm}
 \begin{figure}[H]
     \centering
-    \placeholder{Insert \texttt{reports/models/Farm/master\_comparison.png}.}
-    \caption{Master model comparison on the farm dataset. The
-    classical, MLP and CNN families overlap within a single cluster
-    centred on $F_1 \approx 0.85$.}
+    \includegraphics[width=0.8\textwidth]{Pictures/Figures/master_comparison_Farm.png}
+    \caption{Master model comparison on the farm dataset. The classical, MLP and CNN families overlap within a single cluster centred on $F_1 \approx 0.85$.}
     \label{fig:farm_master_bars}
 \end{figure}
 
+\vspace{-6mm}
 \paragraph{Per-class structure: \texttt{grass} is the hard one.}
-\Cref{tab:farm_perclass} shows that the residual error on the farm dataset is
-concentrated in the \texttt{grass} class, which scores $F_1 = 0.74$ against
-$0.85$ for \texttt{soil} and $0.98$ for \texttt{dirt\_track}. The aggregated
-confusion matrix (\Cref{fig:farm_cm}) shows that \texttt{grass} is most often
-mistaken for \texttt{soil}: short grass on firm soil and bare loose soil
-produce visually and proprioceptively similar low-amplitude, low-frequency
-chassis motion, and the cross-sensor correlations selected by the MI ranking
-(\Cref{sec:feat_mi_pruning}) are not always enough to separate them on a
-single run. \texttt{Dirt\_track} is essentially solved on every fold, which
-is consistent with the physical picture: a compacted track produces a
-high-amplitude, broad-spectrum vibration signature that the other two
-classes do not exhibit.
+\Cref{tab:farm_perclass} shows that the residual error is concentrated in the \texttt{grass} class, which scores $F_1 = 0.76$ against $0.86$ for \texttt{soil} and $0.98$ for \texttt{dirt\_track}. The aggregated SVM confusion matrix (\Cref{fig:farm_cm}) shows \texttt{grass} most often mistaken for \texttt{soil}: short grass on firm soil and bare loose soil produce proprioceptively similar low-amplitude, low-frequency chassis motion, and the cross-sensor correlations selected by the MI ranking (\Cref{sec:feat_mi_pruning}) are not always enough to separate them on a single run. \texttt{Dirt\_track} is essentially solved on every fold, consistent with the physical picture: a compacted track produces a high-amplitude, broad-spectrum vibration signature the other two classes do not exhibit.
 
 \begin{table}[H]
 \centering
-\caption{Per-class XGBoost ($F_1$) on the farm dataset. All three classes
-are evaluable in every fold. Source:
-\texttt{results/Farm/per\_class\_metrics\_xgboost.csv}.}
+\caption{Per-class SVM ($F_1$) on the farm dataset. Values are from the untuned baseline; tuned values agree to within $\pm 0.002$ on every class, and the tuned per-class file does not record worst-fold metrics. All three classes are evaluable in every fold.}
 \label{tab:farm_perclass}
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Class} & $\overline{F_1}$ & $\sigma_{F_1}$ &
 \textbf{Worst} & \textbf{Folds} \\
 \midrule
-dirt\_track & 0.976 & 0.027 & 0.922 & 5 \\
-soil        & 0.848 & 0.065 & 0.789 & 5 \\
-grass       & 0.744 & 0.116 & 0.562 & 5 \\
+dirt\_track & 0.978 & 0.024 & 0.930 & 5 \\
+soil        & 0.858 & 0.051 & 0.815 & 5 \\
+grass       & 0.758 & 0.135 & 0.543 & 5 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\vspace{-6mm}
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/confusion\_matrix\_xgboost\_all.png}.
-    Aggregated three-class XGBoost confusion matrix.}
-    \caption{Aggregated XGBoost confusion matrix on the farm dataset.
-    \texttt{Grass} confusion mass is concentrated on \texttt{soil};
-    \texttt{dirt\_track} is essentially separable.}
+    \includegraphics[width=0.7\textwidth]{Pictures/Figures/confusion_matrix_svm_all_farm.png}
+    \caption{Aggregated SVM confusion matrix on the farm dataset. \texttt{Grass} confusion mass is concentrated on \texttt{soil}; \texttt{dirt\_track} is essentially separable.}
     \label{fig:farm_cm}
 \end{figure}
 
-\paragraph{Cross-day robustness.}
-The five farm runs span two field days
-(\Cref{tab:farm_sessions}), and the per-run macro-$F_1$ values
-(\Cref{tab:farm_crossday}) drop systematically from day~1 (Run1,~Run2) to
-day~2 (Run3--Run5) across every model family. Day~1 averages
-$F_1 \approx 0.92$ while day~2 averages $F_1 \approx 0.83$ --- a $\sim 0.09$
-point gap that is consistent across all six families and that exceeds the
-fold-to-fold variation within a single day. The two days share weather,
-robot, route plan, and labelling protocol, so the residual variation is
-attributable to changes in soil moisture, grass blade density and the
-operator-driven within-day route choice. The same plateau pattern shows up
-on the campus dataset (\Cref{fig:campus_crossday}), where the gap is
-substantially larger because the weather conditions vary between sessions.
+\vspace{-6mm}
+\section{Model Comparison}
+\label{sec:res_models}
 
-\begin{table}[H]
-\centering
-\caption{Per-run macro-$F_1$ on the farm dataset, three top models. Day~1 =
-21~Apr~2026 (Run1,~Run2); day~2 = 28~Apr~2026 (Run3,~Run4,~Run5). Source:
-\texttt{results/Farm/cross\_day\_performance.csv}.}
-\label{tab:farm_crossday}
-\begin{tabular}{lccccc}
-\toprule
-\textbf{Model} & Run1 & Run2 & Run3 & Run4 & Run5 \\
-\midrule
-SVM                & 0.958 & 0.895 & 0.832 & 0.813 & 0.830 \\
-LogisticRegression & 0.972 & 0.864 & 0.846 & 0.786 & 0.859 \\
-XGBoost            & 0.940 & 0.876 & 0.836 & 0.829 & 0.823 \\
-\bottomrule
-\end{tabular}
-\end{table}
+This section cross-cuts the per-dataset results and consolidates the cross-dataset diagnostics. It addresses three questions: how the classifier families compare under a controlled head-to-head, how much of the campus-vs-farm gap is attributable to model choice versus dataset structure, and how gracefully the pipeline degrades under sensor failure, additive feature noise, and removal of the explicit speed columns.
 
+\paragraph{All families are within one cross-fold standard deviation of each other, but the ranking is structured.}
+On the farm the SVM and LR are nominally best; on the campus 5-class problem, the MLP edges ahead, and the SVM drops to the bottom of the cluster; on both 3-class campus configurations (Datasets~A and~B), the SVM and LR top the list (\Cref{tab:campus_master,tab:campus_A_3class,tab:campusB_master,tab:farm_master}). The SVM/LR are consistently high across every 3-class problem regardless of speed regime, while the 5-class problem with its two rare classes is the only configuration in which max-margin methods lose ground, a pattern more consistent with class structure than with model capacity. In every case, however, the within-dataset top-to-bottom spread is $\sim 0.05$ macro-$F_1$, smaller than the cross-fold standard deviation of any single family, and the paired-Wilcoxon test returns no model pair with $p < 0.05$ on any of the three datasets (\Cref{fig:significance_campus,fig:significance_farm}). At this dataset size ($\sim 10^4$ windows per dataset) and at the LORO operating point, the choice of model family is a second-order effect compared to the choice of dataset, feature set, and (on the campus) speed regime, consistent with the general finding in the IMU classification literature that classical features and classical baselines remain competitive at moderate dataset sizes (\Cref{sec:bg-features-ml}).
+
+\vspace{-4mm}
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/cross\_day\_performance.png}.}
-    \caption{Per-run macro-$F_1$ on the farm dataset. The day-1/day-2 step
-    is consistent across all six model families.}
-    \label{fig:farm_crossday}
+    \begin{subfigure}[t]{0.8\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Pictures/Figures/significance_campus.png}
+        \caption{Campus Dataset~A (5-class).}
+        \label{fig:significance_campus}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.8\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Pictures/Figures/significance_farm.png}
+        \caption{Farm (3-class).}
+        \label{fig:significance_farm}
+    \end{subfigure}
+    \caption{Paired-Wilcoxon $p$-values on fold-level macro-$F_1$ for every model pair. No pair reaches $p<0.05$ on either dataset; the model orderings in \Cref{tab:campus_master,tab:farm_master} should be read as single clusters rather than strict rankings.}
+    \label{fig:significance_heatmaps}
 \end{figure}
 
+\vspace{-8mm}
+\paragraph{Deep models match the engineered-feature baselines within cross-fold noise.}
+The 1D-CNN consumes only the raw $5 \times 200$ window and reaches $F_1 = 0.849 / 0.757 / 0.952$ across the farm, campus 5-class, and Dataset~B problems, within one standard deviation of the top classical baseline on every dataset. Its worst-fold $F_1$ is consistently lower than that of the classical baselines ($0.72 / 0.57 / 0.90$), suggesting that the CNN is more sensitive to the cross-fold distribution shift than the engineered-feature pipeline; the engineered features act as a soft regularisation against the kind of shifts LORO exposes. The MLP, which consumes the same engineered features as the classical baselines, sits at $F_1 \approx 0.84 / 0.77 / 0.97$: it narrowly edges out the classical leaders on the harder 5-class campus problem, where its higher capacity (and explicit class-weighted loss) appears to benefit the rare classes, but trails them by $\sim 0.02$ on the two cleaner 3-class problems. At this dataset size the deep models neither help nor hurt the headline number but do increase the fold-to-fold variance.
+
+\paragraph{Hyperparameter tuning and feature-set choice are marginal.}
+Tuned baselines (\texttt{08\_b\allowbreak ase\_tuning}) recover essentially the same macro-$F_1$ as the untuned baselines on all three datasets, with the randomised search settling on near-identical hyperparameters on the farm and campus 3-class problems and only diverging on the harder 5-class campus problem (\Cref{tab:tuned_hparams}). The tuned-vs-untuned $\Delta F_1$ is within $\pm 0.01$ in every case: below the cross-fold standard deviation. The top-MI vs.\ all-features choice is dataset-dependent: on the campus the top-MI shortlist edges ahead (LR, SVM, XGBoost all reach their best $F_1$ in the top-MI configuration on both A and B), while on the farm the full feature table wins by $\sim 0.03$. The farm's winning configuration includes the cross-sensor correlation features that distinguish \texttt{grass} from \texttt{soil}; on the more heterogeneous campus surface mix, a small handful of the most discriminative features suffices.
+
+\paragraph{The campus-vs-farm gap is dominated by dataset, not by model.}
+\Cref{fig:per_class_farm_vs_campus} aligns the two shared class pairs across the farm and campus three-class problems for all four classical baselines. The \texttt{dirt\_track} pair is essentially solved on both sites; the farm \texttt{grass} class, by contrast, hovers at $F_1 = 0.71$--$0.76$ across every model family, while the campus \texttt{grass} reaches $0.94$--$0.98$. The $\sim 0.20$ farm--campus gap on \texttt{grass} exceeds any model-family difference on either dataset, and the explanation lies in the local class structure rather than the choice of classifier.
+
+The campus three-class subset (\texttt{smooth\_terrain}, \texttt{grass}, \texttt{dry\_dirt\_track}; \Cref{sec:terrain_classes_and_labels}) has no analogue of the farm's \texttt{soil} class, so its three classes span the full roughness spectrum: smooth asphalt, vegetated lawn, compacted dirt, and every pairwise contrast in it is large. The farm triple, by contrast, contains the much harder \texttt{grass}--\texttt{soil} pair: short grass on firm soil and bare loose soil sit close together on the same roughness spectrum and produce overlapping low-amplitude, low-frequency chassis motion. The campus and farm \texttt{grass} are also physically different surfaces (urban park lawn vs.\ farm grass at the field edge). Still, the dominant factor is the class-triple geometry: the campus problem is intrinsically easier because its three classes are further apart in vibration signature, not because the campus classifier is better.
+
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/models/Campus/cross\_day\_performance.png}.}
-    \caption{Per-session macro-$F_1$ on the campus dataset. Inter-session
-    variation here is dominated by weather changes (snow/rain in the
-    February sessions vs.\ dry pavement in March).}
-    \label{fig:campus_crossday}
+    \includegraphics[width=0.85\textwidth]{Pictures/Figures/per_class_farm_vs_campus_B.png}
+    \caption{Per-class $F_1$ on the two shared class pairs (\texttt{dirt\_track}~$\leftrightarrow$~\texttt{dry\_dirt\_track} and \texttt{grass}~$\leftrightarrow$~\texttt{grass}) across the four classical baselines, with farm and Campus~B side by side. The \texttt{dirt\_track} pair is essentially classified on both sites ($F_1 \ge 0.94$ everywhere); the \texttt{grass} pair is $\sim 0.20$ harder on the farm than on the campus, and this dataset gap holds across every model family.}
+    \label{fig:per_class_farm_vs_campus}
 \end{figure}
 
 \paragraph{Sensor-dropout robustness.}
-\label{par:sensor_dropout}
-A central question for an intrinsic-only terrain pipeline is which of the
-three sensor channel groups --- accelerometer, gyroscope, and odometry ---
-actually carries the discriminative information, and how gracefully the
-pipeline degrades if one of them fails. Each channel group was disabled
-in two modes (\Cref{tab:dropout_farm}): (i)~\emph{test-time zero},
-simulating a transient sensor failure at deployment by zero-ing the
-corresponding columns on the held-out fold only (the model was trained on
-the full feature table), and (ii)~\emph{full ablation}, simulating a
-permanent removal at design time by retraining the model without those
-columns. The contrast between the two is informative: a sensor that is
-catastrophic at (i) but harmless at (ii) is one the model has learned to
-rely on; a sensor that is harmless at both is one whose information was
-redundant from the start.
-
-\begin{table}[H]
-\centering
-\caption{Sensor-dropout robustness on the farm dataset (LogisticRegression).
-$\Delta F_1$ is measured against the all-features baseline of
-$F_1 = 0.842$. Source: \texttt{results/Farm/sensor\_dropout.csv}.}
-\label{tab:dropout_farm}
-\begin{tabular}{llcc}
-\toprule
-\textbf{Channel group} & \textbf{Mode} & $\overline{F_1}$ &
-$\Delta F_1$ \\
-\midrule
-All features (baseline) & ---                    & 0.842 & $0.000$ \\
-Accelerometer           & test-time zero         & 0.515 & $-0.328$ \\
-Accelerometer           & full ablation (retrain)& 0.818 & $-0.024$ \\
-Gyroscope               & test-time zero         & 0.579 & $-0.263$ \\
-Gyroscope               & full ablation (retrain)& 0.837 & $-0.005$ \\
-Odometry                & test-time zero         & 0.841 & $-0.001$ \\
-Odometry                & full ablation (retrain)& 0.843 & $+0.000$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Two findings stand out. First, a transient loss of \emph{either} the
-accelerometer or the gyroscope on the farm dataset is catastrophic
-(test-time-zero $\Delta F_1$ of $-0.33$ and $-0.26$ respectively), but a
-permanent loss is essentially recoverable by retraining ($\Delta F_1$ of
-$-0.02$ and $-0.01$). The model can express the terrain signature equally
-well in either inertial channel \emph{group} alone --- pitch/roll rates and
-the vertical accelerometer share the same physical excitation --- but if it
-has been trained on both and then loses one without warning, the standardised
-zero values land far outside the in-distribution feature space and the
-classifier's decision boundary breaks. Second, odometry is essentially free:
-neither the test-time zero nor the full ablation moves $F_1$ by more than
-$0.001$. The discriminative information was already absorbed by the
-speed-normalised vibration features, and the explicit odometry columns do
-not add a separable contribution on top.
+A central question for an intrinsic-only pipeline is which sensor channel group carries the discriminative information and how gracefully the pipeline degrades if one fails. Each group was disabled in two modes: \emph{test-time zero}, simulating a transient sensor failure by zero-ing the corresponding columns on the held-out fold only, and \emph{full ablation}, simulating permanent removal by retraining without those columns. \Cref{fig:dropout_compare} reports the test-time-zero outcomes across the three datasets.
 
 \begin{figure}[H]
     \centering
-    \placeholder{Insert \texttt{reports/models/Farm/sensor\_dropout.png}.
-    Grouped bar chart of $\Delta F_1$ for the six (sensor, mode)
-    combinations vs.\ the all-features baseline, with CI error bars.}
-    \caption{Sensor-dropout robustness on the farm dataset. The contrast
-    between the test-time-zero columns and the full-ablation columns
-    indicates that the model can express the terrain signature in any
-    one inertial channel alone, but it cannot tolerate a silent failure
-    of a channel it was trained on.}
-    \label{fig:dropout_farm}
-\end{figure}
-
-The campus picture is markedly different
-(\Cref{tab:dropout_campus_compare}). On the five-class Dataset~A, zeroing
-the gyroscope at test time costs $\Delta F_1 = -0.39$ while zeroing the
-accelerometer costs only $-0.12$, and on the three-class Dataset~B the
-asymmetry sharpens to $-0.62$ vs $-0.007$. The gyroscope is dominant on
-campus and roughly co-equal with the accelerometer on the farm. The most
-plausible explanation lies in the surface mix: the campus dataset includes
-extremes of stiffness (smooth asphalt vs cobblestone) whose discriminative
-signature is dominated by the pitch and roll modes that the gyroscope
-captures, whereas the farm classes (\texttt{dirt\_track}, \texttt{soil},
-\texttt{grass}) differ as much in vertical-acceleration amplitude as in
-chassis-rocking, so the discriminative information is split more evenly
-across the two inertial sensor groups. The campus-B accelerometer ablation
-that costs essentially nothing ($-0.007$) is consistent with the same
-picture --- on a three-class problem dominated by pitch/roll signatures the
-accelerometer is redundant.
-
-\begin{table}[H]
-\centering
-\caption{Test-time-zero sensor dropout across all three datasets, expressed
-as $\Delta F_1$ against the all-features baseline. Source:
-\texttt{results/comparison/master\_model\_comparison\_farm\_vs\_campus.csv}
-and the per-dataset \texttt{sensor\_dropout.csv} files.}
-\label{tab:dropout_campus_compare}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Channel zeroed} & \textbf{Farm (3-cls)} &
-\textbf{Campus A (5-cls)} & \textbf{Campus B (3-cls)} \\
-\midrule
-Accelerometer & $-0.328$ & $-0.118$ & $-0.007$ \\
-Gyroscope     & $-0.263$ & $-0.387$ & $-0.616$ \\
-Odometry      & $-0.001$ & $-0.011$ & $-0.002$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/comparison/sensor\_dropout\_farm\_vs\_campus.png}.}
-    \caption{Sensor-dropout comparison across the three datasets. The
-    accelerometer/gyroscope balance is roughly even on the farm but
-    strongly gyroscope-skewed on the campus, particularly on the
-    three-class subset.}
+    \includegraphics[width=\textwidth]{Pictures/Figures/sensor_dropout_farm_vs_campus.png}
+    \caption{Test-time-zero sensor-dropout $\Delta F_1$ across the three datasets, measured against the all-features baseline. The left figure shows Farm, the middle shows Campus Dataset A with 5 classes, and the right figure shows Campus Dataset B.}
     \label{fig:dropout_compare}
 \end{figure}
 
+Two findings emerge. First, the contrast between the two modes is most informative on the farm: a transient zero of either inertial channel group at test time is catastrophic (\Cref{fig:dropout_compare} Farm), but the same channel removed permanently with retraining costs only $\Delta F_1 = -0.02$ for the accelerometer and $-0.01$ for the gyroscope. The model can express the terrain signature in either inertial channel group alone: pitch/roll rates and the vertical accelerometer share the same physical excitation, but if it has been trained on both and then loses one without warning, the standardised zero values fall far outside the in-distribution feature space and the decision boundary breaks. Odometry is essentially free in both modes, confirming that the speed-normalised vibration features already absorb its discriminative information.
+
+Second, the campus-vs-farm balance differs. On the farm, the accelerometer and gyroscope are roughly co-equal; on the campus, the gyroscope is dominant in both datasets, and the asymmetry sharpens further on the 3-class Dataset~B, where the accelerometer is essentially redundant. The plausible reading lies in the surface mix: the campus includes extremes of stiffness (smooth asphalt vs.\ cobblestone) whose discriminative signature is dominated by the pitch and roll modes that the gyroscope captures, whereas the farm classes differ as much in vertical-acceleration amplitude as in chassis-rocking, so the discriminative information is split more evenly across the two inertial groups.
+
 \paragraph{Noise sensitivity.}
-\Cref{fig:noise_sensitivity} shows the macro-$F_1$ degradation when zero-mean
-Gaussian noise of standard deviation $\sigma$ (in units of the standardised
-feature) is added to the test fold only. The farm dataset degrades
-gracefully from $0.84$ at $\sigma = 0$ to $0.59$ at $\sigma = 2.0$; the
-five-class campus drops more steeply, from $0.75$ to $0.39$, while the
-three-class campus subset starts the highest ($0.86$) and ends at $0.47$.
-The crossover at $\sigma \approx 0.8$ between Campus~A and Campus~B reflects
-the fact that the high baseline of Dataset~B is partly carried by a
-narrow-margin SVM that is more easily disrupted than the broader
-feature-space decision boundary on Dataset~A.
+\Cref{fig:noise_sensitivity} shows the macro-$F_1$ degradation when zero-mean Gaussian noise of standard deviation $\sigma$ (in units of the standardised feature) is added to the test fold only. The farm classifier degrades most gracefully ($0.84 \to 0.59$ as $\sigma$ goes $0 \to 2$); the five-class campus drops more steeply ($0.75 \to 0.39$); Dataset~B starts the highest ($0.86$) but degrades the fastest ($\to 0.47$). A plausible reading is that Dataset~B's near-saturated clean baseline rests on a few sharp feature contrasts between physically distinct surfaces (smooth asphalt vs.\ vegetated lawn vs.\ compacted dirt), which noise erodes quickly; the farm classifier instead distributes its discriminative weight across many cross-sensor correlations between physically similar classes, which together survive noise better.
 
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/models/comparison/noise\_sensitivity\_farm\_vs\_campus.png}.}
-    \caption{Noise sensitivity across the three datasets. The farm
-    classifier degrades the most gracefully under additive feature noise;
-    the campus three-class subset starts the highest but degrades the
-    fastest.}
+    \includegraphics[width=0.8\textwidth]{Pictures/Figures/noise_sensitivity_farm_vs_campus.png}
+    \caption{Noise sensitivity across the three datasets, using a balanced Random Forest as the representative classifier.}
     \label{fig:noise_sensitivity}
 \end{figure}
 
-\section{Speed Sensitivity Analysis}
-\label{sec:res_speed}
+\vspace{-6mm}
+\paragraph{Speed-only feature ablation.}
+\Cref{sec:res_campus} already showed that restricting the campus dataset to the low-constant-speed regime buys only $0.003$--$0.026$ macro-$F_1$; this ablation probes the velocity--vibration confound from the opposite direction. \Cref{tab:speed_only} compares the best classical baseline on the full pruned feature table against the same baseline trained on the four explicit odometry/speed columns only. The speed-only configurations reach $F_1 \approx 0.49$--$0.50$ on both multi-speed sites, well above the stratified-dummy levels of $0.20$ (campus 5-class) and $0.32$ (farm), but $0.3$--$0.4$ below the full pipeline. Removing the speed columns while keeping every vibration feature (\texttt{all\_no\_speed}) is essentially free: at most $0.003$ macro-$F_1$ cost on the campus and a marginal $0.003$ \emph{gain} on the farm. The model registers the speed columns but does not rely on them, consistent with the sensor-dropout finding above that odometry is redundant on top of the speed-normalised vibration features.
 
-The velocity--vibration confound discussed in \Cref{sec:bg-vel} predicts that
-classifiers trained on multi-speed logs can implicitly learn to discriminate
-classes from speed alone. This section quantifies the residual effect on the
-campus dataset, where speed was deliberately allowed to vary, and confirms
-that the farm dataset --- recorded at the intrinsically low and roughly
-constant operating speed --- already sits inside the low-speed regime.
-
-\paragraph{Speed-only features are above chance but well below the full
-pipeline.}
-\Cref{tab:speed_only} compares the same four classical models trained on the
-full pruned feature table against models trained on the four explicit
-odometry/speed columns only (\texttt{odom\_mean\_speed},
-\texttt{odom\_speed\_std}, \texttt{odom\_distance}, \texttt{net\_speed}).
-The speed-only configurations reach $F_1 = 0.40$--$0.50$ on both datasets,
-well above the stratified-dummy levels of $0.20$ (campus 5-class) and
-$0.32$ (farm). Speed is therefore informative on both datasets ---
-characteristic per-class speed regimes do exist, especially on the campus
-data --- but it is far from sufficient on its own. Removing the speed
-columns from the feature table while keeping every vibration feature
-(\texttt{all\_no\_speed}) costs at most $0.01$ macro-$F_1$ on the campus and
-$0.008$ on the farm, which says that the model is using the speed columns
-but is not relying on them.
-
+\vspace{-3mm}
 \begin{table}[H]
 \centering
-\caption{Effect of restricting or removing speed columns. Macro-$F_1$ mean
-of the top-performing classical configuration. Source:
-\texttt{baseline\_metrics\_summary.csv} per dataset.}
+\small
+\caption{Effect of restricting or removing speed columns. Macro-$F_1$ of the best classical configuration per cell. Speed-only does not apply to Dataset~B, whose speed range is itself the restriction.}
 \label{tab:speed_only}
 \begin{tabular}{lccc}
 \toprule
-\textbf{Feature set} & \textbf{Campus A (5-cls)} & \textbf{Campus B (3-cls)} &
-\textbf{Farm (3-cls)} \\
+\textbf{Feature set} & \textbf{Campus A (5-cls)} & \textbf{Campus B (3-cls)} & \textbf{Farm (3-cls)} \\
 \midrule
-all                 & 0.770 & 0.978 & 0.866 \\
-all\_no\_speed      & 0.765 & 0.971 & 0.858 \\
+all                 & 0.768 & 0.981 & 0.865 \\
+all\_no\_speed      & 0.765 & 0.981 & 0.868 \\
 speed\_only         & 0.494 & ---   & 0.499 \\
 Stratified dummy    & 0.201 & 0.347 & 0.320 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Constraining to the low-speed regime: modest but consistent gain
-in isolation.}
-On the three-class campus problem the same windows can be evaluated at the
-multi-speed (Dataset~A) and the low-constant-speed (Dataset~B) regime, so
-the speed effect can be isolated from class structure.
-\Cref{tab:speed_lowspeed_vs_multispeed} reports the resulting deltas: every
-classical model gains $0.005$--$0.026$ macro-$F_1$ in the low-speed regime,
-and every model gains in robustness as well. The gain is consistent in
-direction but small in magnitude, which is the expected behaviour: the speed
-range present on Dataset~A is already moderate, and the vibration features
-do not collapse under it. The much larger campus 5-class vs campus 3-class
-$F_1$ delta of $\sim 0.20$ reported in \Cref{sec:res_campus} is therefore
-mostly attributable to dropping the two collapsing minority classes, not to
-the speed restriction.
 
-\begin{table}[H]
-\centering
-\caption{Three-class campus problem at the low-constant-speed (Dataset~B)
-vs the multi-speed (Dataset~A) regime, balanced configurations.
-$\Delta F_1$ = low-speed $-$ multi-speed. Source:
-\texttt{results/Campus\_dataset\_B\_3class/comparison\_lowspeed\_vs\_multispeed\_3class.csv}.}
-\label{tab:speed_lowspeed_vs_multispeed}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Model} & \textbf{Low-speed (B)} & \textbf{Multi-speed (A, 3-cls)} &
-$\Delta F_1$ \\
-\midrule
-LogisticRegression & 0.970 & 0.967 & $+0.003$ \\
-SVM                & 0.958 & 0.946 & $+0.012$ \\
-RandomForest       & 0.978 & 0.952 & $+0.026$ \\
-XGBoost            & 0.979 & 0.958 & $+0.021$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\paragraph{Farm: already inside the low-speed regime.}
-On the farm logs the joint mask of \Cref{eq:dataset_B_mask}
-($v < \SI{0.6}{\meter\per\second}$ and
-$\sigma_v < \SI{0.10}{\meter\per\second}$) is satisfied by essentially every
-window, so Dataset~A and Dataset~B coincide and a single feature table is
-used. The farm operating point therefore lies inside the regime where the
-speed confound is minimised, and the cross-dataset comparison in
-\Cref{tab:speed_only,tab:speed_lowspeed_vs_multispeed} shows that the
-3-class campus results at this operating point ($F_1 = 0.98$) form an upper
-bound on the same-classes case --- the farm gap of $\sim 0.12$ macro-$F_1$
-between the campus and farm three-class problems
-(\Cref{tab:campus_v_farm_perclass}) is then attributable to the harder
-class structure on the farm rather than to a residual speed effect.
-
-\paragraph{Speed-bin distributions per class.}
-The per-class speed-bin distributions
-(\texttt{results/Farm/run\_label\_speed\_bins.csv} and
-\texttt{results/Campus/run\_label\_speed\_bins.csv}) confirm that the farm
-data is concentrated in the lowest two speed bins on every class
-(\Cref{fig:speed_bins}), whereas the campus data spreads each class across
-all three bins, with cobblestone and smooth-terrain heavily concentrated in
-the highest bin. This is the structural reason behind the asymmetric class
-collapse observed in \Cref{tab:campus_perclass}: a fold whose test set
-contains the cobblestone segments has them recorded almost exclusively in
-the highest speed bin, while the same class in training was recorded at
-mixed speeds.
-
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert a two-panel figure with the per-class
-    speed-bin distributions for the farm dataset (left) and the campus
-    dataset (right). Data source:
-    \texttt{results/\{location\}/run\_label\_speed\_bins.csv}.}
-    \caption{Per-class speed-bin distribution on the two sites. The farm
-    classes are concentrated in the low-speed bins as expected from the
-    operating profile; the campus classes spread across all three bins
-    and the rare minority classes (cobblestone) are concentrated in the
-    high-speed bin.}
-    \label{fig:speed_bins}
-\end{figure}
-
-\section{Model Comparison}
-\label{sec:res_models}
-
-This section cross-cuts the per-dataset results and addresses three
-questions: how the classical, MLP and CNN families compare under a
-controlled head-to-head, how strongly the choice of model is statistically
-significant, and how much of the gap between the campus and farm sites is
-attributable to model choice as opposed to dataset structure.
-
-\paragraph{All families are within one standard deviation of each other.}
-\Cref{fig:master_compare_3datasets} consolidates the
-\texttt{master\_model\_comparison} tables across the three datasets. The
-classical models cluster tightly with the MLP and the CNN; on the farm
-dataset the SVM and LR are nominally best, on the campus 5-class problem
-the MLP edges ahead, and on the campus 3-class subset the SVM and LR are
-top. In every case the difference between the top and bottom model is
-smaller than the cross-fold standard deviation of either, which is also
-borne out by the paired Wilcoxon $p$-values: no pair reaches $p < 0.05$ on
-any of the three datasets (\Cref{fig:significance_compare}). The practical
-implication is that, on this dataset size and at this LORO operating point,
-the choice of model family is a second-order effect compared to the choice
-of dataset, feature set, and (on the campus) speed regime. This is
-consistent with the general finding in the IMU classification literature
-that classical features and classical baselines remain competitive at
-moderate dataset sizes (\Cref{sec:bg-features-ml}).
-
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/comparison/master\_comparison\_bars.png}.
-    Three-panel grouped bar chart of macro-$F_1$ per model per dataset.}
-    \caption{Cross-dataset master comparison. The within-dataset model
-    spread ($\sim 0.05$ macro-$F_1$) is small compared with the
-    cross-dataset spread ($\sim 0.20$ macro-$F_1$).}
-    \label{fig:master_compare_3datasets}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/comparison/significance\_farm\_vs\_campus.png}.
-    Three significance heatmaps (one per dataset) of paired Wilcoxon
-    $p$-values on fold-level $F_1$. Source:
-    \texttt{results/\{location\}/significance\_pvalues.csv}.}
-    \caption{Paired Wilcoxon $p$-values on fold-level macro-$F_1$ for every
-    model pair. No pair reaches $p<0.05$ on any of the three datasets.}
-    \label{fig:significance_compare}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/significance\_heatmaps.png} and
-    \texttt{reports/models/Campus/significance\_heatmaps.png} as two
-    side-by-side panels.}
-    \caption{Per-dataset significance heatmaps for the farm and the campus
-    5-class problems.}
-    \label{fig:significance_farm}
-\end{figure}
-
-\paragraph{The CNN matches the engineered features without using them.}
-The 1D-CNN consumes only the raw $5 \times 200$ window and reaches
-$F_1 = 0.849$ on the farm dataset, $0.757$ on campus 5-class, and $0.952$
-on campus 3-class --- in every case within one standard deviation of the
-top classical baseline trained on the engineered features
-(\Cref{tab:campus_master,tab:campusB_master,tab:farm_master}). The CNN
-worst-fold $F_1$ is consistently lower than that of the classical baselines
-(0.72 on farm, 0.57 on campus 5-class, 0.90 on campus 3-class), which
-suggests that the CNN is more sensitive to the cross-fold distribution shift
-than the engineered-feature pipeline; the engineered features act as a form
-of soft regularisation against the kind of distribution shifts that LORO
-exposes. The MLP, which consumes the same engineered features as the
-classical baselines, sits at $F_1 = 0.84$--$0.77$--$0.97$ across the three
-datasets, slightly behind the classical leaders. The most plausible reading
-is that, at this dataset size ($\sim 10^4$ windows per dataset), the deep
-models neither help nor hurt the headline number but do increase the
-fold-to-fold variance.
-
-\paragraph{Tuning has a marginal effect.}
-The tuned baselines (\texttt{08\_base\_tuning}) recover essentially the same
-macro-$F_1$ as the untuned baselines on all three datasets, with the
-randomised search settling on near-identical hyperparameters on the farm and
-campus 3-class problems and only diverging on the harder 5-class campus
-problem (\Cref{tab:tuned_hparams}). The tuned-vs-untuned $\Delta F_1$ is
-within $\pm 0.01$ in every case, which is below the cross-fold standard
-deviation; the marginal value of tuning at this operating point is
-negligible.
-
-\paragraph{Top-MI vs all features: dataset-dependent.}
-On the campus dataset, the top-MI shortlist edges ahead of the full pruned
-feature table (LR/SVM/XGBoost all reach their best $F_1$ in the top-MI
-configuration on Datasets~A and~B). On the farm dataset, the full feature
-table wins by $\sim 0.03$ macro-$F_1$. The cross-sensor correlation
-features, which appear in the farm-only winning configuration, do not
-survive the campus MI ranking at the same $N=15$ shortlist, which is
-consistent with the physical reading: on a more heterogeneous surface mix
-(campus) a small handful of the most discriminative features is enough,
-whereas on a more homogeneous surface mix (farm) it pays to keep the long
-tail of weaker features --- including the cross-sensor correlations that
-distinguish \texttt{grass} from \texttt{soil}.
-
-\paragraph{The campus-vs-farm gap is dominated by dataset, not by model.}
-\Cref{tab:campus_v_farm_perclass} aligns the shared class \texttt{grass}
-across the farm and campus 3-class problems. The same model family scores
-$F_1 = 0.74$ on the farm \texttt{grass} and $F_1 = 0.97$ on the campus
-\texttt{grass}, a gap of $\sim 0.23$ that exceeds any model-family
-difference on either dataset. The campus and farm \texttt{grass} are
-physically different surfaces (urban park lawn on firm soil vs farm grass
-on tilled soil at the field edge), and the campus \texttt{grass} contrasts
-against asphalt and a dirt track that are much further apart in vibration
-signature than the farm's \texttt{soil} and \texttt{dirt\_track}. The
-discriminative gap therefore reflects how separable the local class triple
-is, not the choice of classifier.
-
-\begin{table}[H]
-\centering
-\caption{Shared-class farm vs.\ campus comparison (logistic regression,
-balanced configuration). The mapped class pair \texttt{grass} is
-$\sim 0.20$ macro-$F_1$ harder on the farm. Source:
-\texttt{results/comparison/per\_class\_farm\_vs\_campus\_B.csv}.}
-\label{tab:campus_v_farm_perclass}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Class pair} & $F_1$ (Farm) & $F_1$ (Campus B) &
-$\Delta$ \\
-\midrule
-dirt\_track $\leftrightarrow$ dry\_dirt\_track & 0.977 & 0.956 & $+0.021$ \\
-grass $\leftrightarrow$ grass                  & 0.760 & 0.966 & $-0.206$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/comparison/per\_class\_farm\_vs\_campus\_B.png}.}
-    \caption{Per-class macro-$F_1$ for the two mapped classes
-    (\texttt{dirt\_track} and \texttt{grass}) across the farm and campus
-    three-class problems.}
-    \label{fig:per_class_compare}
-\end{figure}
-
-%\section{Transition Detection}
-
-\section{Change-detection-based transition analysis}
+\section{Change-Detection-Based Transition Analysis}
 \label{sec:res_transition}
 
-%TODO: the four algorithmic subsections previously drafted here
-%(Problem formulation, CUSUM statistic recursion, Threshold selection,
-%Vector-CUSUM variant on IMU features) are methodology rather than
-%results. They have been moved to an extension of \Cref{sec:bg-transition}
-%/ a new subsection of \Cref{ch:classification}; this section now reports
-%only the numerical findings and refers back via \Cref{}.
+\Cref{sec:bg-transition} introduced two ways of declaring a terrain transition from a sliding-window classifier: the implicit $n_{\text{stable}}$ rule, which takes the hard argmax of the per-window posterior and waits for $n_{\text{stable}}$ consecutive consistent windows, and the explicit CUSUM detector, which accumulates the log-likelihood ratio on the soft posterior stream and raises an alarm when the running statistic crosses a threshold $h$ (\Cref{eq:cusum-llr,eq:cusum-recursion,eq:cusum-alarm}). CUSUM decides by itself \emph{whether} a change has occurred and \emph{to which class}, and its threshold $h$ can be calibrated to a target false-alarm rate independently of the underlying classifier, a diagnostic the implicit rule cannot offer.
 
+\paragraph{Evaluation protocol.} The detector emits $\bigl\{\bigl(k_a^{(j)},\,\hat{c}^{(j)}\bigr)\bigr\}$ from the per-window posterior stream of the best LORO-fold model. Each ground-truth transition $(t_k,\ell_k)$ is paired with the first alarm satisfying $t_k - \delta \le t_{k_a} < t_{k+1}$, with a grace $\delta = 1\,\text{s}$ to allow detections triggered on the last window before the change. The pairing yields one of four outcomes per transition: \textbf{detected} (an alarm exists in the window and $\hat{c} = \ell_k$), \textbf{wrong-class} (an alarm exists but $\hat{c}\neq\ell_k$), \textbf{missed} (no alarm exists in the window), or \textbf{boundary} (insufficient windows remain after $t_k$ to observe a stable detection). Detection delay is $t_{k_a} - t_k$. Alarms outside any expected window are accumulated into a \emph{false-alarm rate} (alarms per minute of stationary signal), which the $n_{\text{stable}}$ evaluation cannot measure intrinsically.
 
+\paragraph{$n_{\text{stable}}$ baseline.} \Cref{tab:transition_nstable} summarises the implicit detector at $n_{\text{stable}} = 5$. On the farm, the CNN and MLP detect every transition ($16/16$) at mean delays of $1.85\,\text{s}$ and $3.58\,\text{s}$; XGBoost and LR detect $94\,\%$ at $4$--$5\,\text{s}$; SVM is the slowest at $13.2\,\text{s}$. On the campus dataset A 5 classes, MLP and RF detect the fastest ($\sim 1\,\text{s}$ at $83\,\%$ detection), but XGBoost, LR, SVM and CNN reach $100\,\%$ detection only after a $\sim 50\,\text{s}$ mean delay, driven by a single uncertain transition on the snowy 23~Feb log where the stable-run rule waits indefinitely for five consistent windows. \Cref{fig:transition_nstable} sweeps $n_{\text{stable}}$ on the farm: mean delay grows linearly while the spurious-flip rate decays inversely. The implicit rule therefore trades delay against false alarms but cannot calibrate to a fixed budget, exactly the limitation the explicit CUSUM detector is intended to address.
 
-%TODO AFTER CHANGIN SECTION 2.5
-%What stays in Ch. 8 (implementation + evaluation): The full quadratic-form vector-CUSUM equation (it's a methodological detail) The grace δ=1s for matching alarms to ground-truth transitions. The four evaluation outcomes (detected / wrong-class / missed / boundary). The actual numerical results, threshold sweep, delay-vs-false-alarm curves. The "Evaluation against ground-truth transitions" subsection
-
-\Cref{sec:bg-transition} introduced two ways of declaring a terrain
-transition from a sliding-window classifier: the implicit
-$n_{\text{stable}}$ rule, which takes the hard argmax of the per-window
-posterior and waits for $n_{\text{stable}}$ consecutive consistent windows,
-and the explicit CUSUM detector, which accumulates the log-likelihood ratio
-on the soft posterior stream and raises an alarm when the running statistic
-crosses a threshold $h$ (\Cref{eq:cusum-llr,eq:cusum-recursion,eq:cusum-alarm}).
-The CUSUM detector decides by itself \emph{whether} a change has occurred
-and \emph{to which class}, and its threshold $h$ can be calibrated to a
-target false-alarm rate independently of the underlying classifier --- a
-diagnostic the implicit rule cannot offer.
-
-\paragraph{Evaluation protocol.}
-The detector emits an unordered list of alarms
-$\bigl\{\bigl(k_a^{(j)},\,\hat{c}^{(j)}\bigr)\bigr\}$ from the per-window
-posterior stream of the best LORO-fold model. Each ground-truth transition
-$(t_k,\ell_k)$ is paired with the first alarm satisfying
-$t_k - \delta \le t_{k_a} < t_{k+1}$, with grace $\delta = 1\,\text{s}$ to
-allow detections triggered on the last window before the change. The pairing
-yields one of four outcomes per transition:
-\begin{itemize}
-  \item \textbf{detected} --- an alarm exists in the window and
-        $\hat{c} = \ell_k$;
-  \item \textbf{wrong-class} --- an alarm exists but $\hat{c}\neq\ell_k$;
-  \item \textbf{missed} --- no alarm exists in the window;
-  \item \textbf{boundary} --- insufficient windows remain after $t_k$ to
-        observe a stable detection.
-\end{itemize}
-Detection delay is $t_{k_a} - t_k$. Alarms that fall outside any expected
-window are accumulated into a \emph{false-alarm rate} (alarms per minute of
-stationary signal), which the original $n_{\text{stable}}$ evaluation could
-not measure.
-
-\paragraph{$n_{\text{stable}}$ baseline.}
-\Cref{tab:transition_nstable} summarises the implicit detector's behaviour
-on both sites. On the farm dataset, the CNN and the MLP detect every
-transition ($16/16$, $100\,\%$) at mean delays of $1.85\,\text{s}$ and
-$3.58\,\text{s}$ respectively; XGBoost and LR detect $94\,\%$ of
-transitions at $4.2$--$5.4\,\text{s}$ mean delay; SVM is the slowest
-($13.2\,\text{s}$). On the campus dataset, the picture is more variable:
-MLP and RF detect the fastest ($\sim 1\,\text{s}$ mean delay, but at lower
-detection rate $83\,\%$), while XGBoost/LR/SVM/CNN reach $100\,\%$ detection
-but with $\sim 50\,\text{s}$ mean delay --- driven by a single transition on
-the snowy 23~Feb log where the classifier is uncertain for an extended
-period and the stable-run rule waits for $n_{\text{stable}} = 5$ consistent
-windows. This sensitivity to a single transition is precisely the kind of
-behaviour the explicit CUSUM detector is intended to control.
-
+\vspace{-4mm}
 \begin{table}[H]
 \centering
-\caption{Transition-detection summary using the $n_{\text{stable}}$ implicit
-rule, $n_{\text{stable}} = 5$ windows ($\SI{2}{\second}$ each). Source:
-\texttt{results/\{location\}/transition\_analysis\_summary.csv}.}
+\small
+\caption{Transition-detection summary using the $n_{\text{stable}} = 5$ implicit rule ($\SI{2}{\second}$ windows).}
 \label{tab:transition_nstable}
 \begin{tabular}{llccc}
 \toprule
@@ -823,87 +377,42 @@ Campus  & SVM                & $11/12$ ($92\%$)  & 50.7  & 537.8 \\
 \end{tabular}
 \end{table}
 
+\vspace{-4mm}
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/transition\_sensitivity\_n\_stable.png}.
-    Detection-delay vs.\ $n_{\text{stable}}$ sweep on the farm dataset.}
-    \caption{Detection delay vs.\ stability-run length $n_{\text{stable}}$
-    on the farm dataset. The mean delay grows approximately linearly with
-    $n_{\text{stable}}$, as expected from a low-pass smoothing rule.}
+    \includegraphics[width=0.8\textwidth]{Pictures/Figures/transition_sensitivity_n_stable.png}
+    \caption{Detection delay vs.\ stability-run length $n_{\text{stable}}$ on the farm dataset. The mean delay grows approximately linearly with $n_{\text{stable}}$, as expected from a low-pass smoothing rule.}
     \label{fig:transition_nstable}
 \end{figure}
 
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/transition\_timelines\_randomforest.png}
-    and \texttt{reports/models/Campus/transition\_timelines\_randomforest.png}
-    as a stacked two-panel figure.}
-    \caption{Per-window posterior streams and detected transitions on the
-    farm (top) and campus (bottom) datasets, RandomForest. Shaded bands
-    are the ground-truth class segments; the vertical lines mark
-    $n_{\text{stable}}$ detections.}
-    \label{fig:transition_timelines}
-\end{figure}
-
 \paragraph{CUSUM operating curve.}
-\Cref{fig:cusum_operating} plots the CUSUM detector's mean detection delay
-against its false-alarm rate as the threshold $h$ is swept on the farm
-training folds. As predicted by Wald's approximation
-(\Cref{sec:bg-transition}), the false-alarm rate grows approximately as
-$\exp(-h)$ while the mean detection delay grows approximately linearly in
-$h$. The operating curve sits below the $n_{\text{stable}}$ envelope at low
-false-alarm rates (i.e.\ for a given target false-alarm rate of, say, one
-spurious alarm per minute of stationary signal, the CUSUM detector reaches
-a lower mean detection delay than the implicit rule), confirming the
-methodological motivation: the soft posterior carries information that the
-hard-argmax smoother discards.
+The CUSUM detector was calibrated per model to a target mean time between false alarms of $\sim 60\,\text{s}$ ($\sim 0.3$ false alarms per minute of stationary signal), yielding the per-model thresholds $h$ in \Cref{tab:transition_cusum}. Detection rates at this operating point range from $75\,\%$ (RF) to $94\,\%$ (MLP, CNN); mean detection delays cluster between $3$ and $6\,\text{s}$. Wrong-class alarms appear in every model ($1$--$3$ of $16$ transitions), an outcome the implicit rule cannot generate but that the explicit detector trades against improved detection speed for the slower classifiers. \Cref{fig:cusum_operating} plots the detector's mean delay against its false-alarm rate as $h$ is swept. As predicted by Wald's approximation (\Cref{sec:bg-transition}), the false-alarm rate decreases approximately as $\exp(-h)$ while the mean detection delay grows approximately linearly in $h$, so the threshold can be calibrated analytically to any target false-alarm budget, a handle the $n_{\text{stable}}$ rule does not provide. \Cref{fig:cusum_timeline} shows a representative run's posterior stream, the running CUSUM statistics $g_c(k)$, and the threshold crossings against the ground-truth transitions.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Per-model CUSUM detector behaviour on the farm dataset at a target of $\sim 1$ false alarm per minute of stationary signal. Thresholds $h$ are calibrated per model from the training-fold operating curves.}
+\label{tab:transition_cusum}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Model} & $h$ & \textbf{Det.} & \textbf{Wrong} & \textbf{Missed} & \textbf{Mean delay [s]} & \textbf{FA/min} \\
+\midrule
+RandomForest       & 3.00 & 12 & 3 & 1 & 4.08 & 0.34 \\
+XGBoost            & 7.00 & 14 & 2 & 0 & 4.17 & 0.33 \\
+LogisticRegression & 5.00 & 13 & 2 & 1 & 3.11 & 0.33 \\
+SVM                & 5.00 & 13 & 3 & 0 & 3.74 & 0.33 \\
+MLP                & 8.00 & 15 & 1 & 0 & 4.98 & 0.31 \\
+CNN                & 8.00 & 15 & 1 & 0 & 5.84 & 0.39 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[H]
     \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/cusum\_operating\_curves.png}. Mean
-    detection delay (y) vs.\ false-alarm rate per minute (x) for the CUSUM
-    detector at a sweep of thresholds $h$, with the $n_{\text{stable}}$
-    operating points overlaid as crosses.}
-    \caption{CUSUM operating curve on the farm dataset. Each marker is a
-    threshold $h$; the $n_{\text{stable}}$ operating points are overlaid
-    for comparison.}
+    \includegraphics[width=0.75\textwidth]{Pictures/Figures/cusum_operating_curves.png}
+    \caption{CUSUM operating curve on the farm dataset --- mean detection delay vs.\ false-alarm rate as the threshold $h$ is swept, per model.}
     \label{fig:cusum_operating}
 \end{figure}
 
-\begin{figure}[H]
-    \centering
-    \placeholder{Insert
-    \texttt{reports/models/Farm/cusum\_timeline\_randomforest.png}. A
-    per-window posterior and the corresponding bank of CUSUM statistics
-    $g_c(k)$ over time, with the threshold $h$ marked and the alarm
-    indices shown.}
-    \caption{CUSUM detector trace on a representative farm run: the soft
-    posterior (top), the bank of $g_c(k)$ statistics (middle), and the
-    alarm decisions vs.\ the ground-truth transitions (bottom).}
-    \label{fig:cusum_timeline}
-\end{figure}
-
-\paragraph{Vector-CUSUM baseline.}
-The classifier-independent vector-CUSUM variant
-(applied directly to the standardised IMU feature vector, with Gaussian
-class statistics estimated on the training folds, cf.\
-\Cref{sec:bg-transition}) is reported as a baseline. It is a strictly
-weaker detector at the operating points of \Cref{fig:cusum_operating}: at
-the same false-alarm rate it incurs a larger mean detection delay, and at
-the same delay it produces more spurious alarms. This is the expected
-outcome: the per-class Gaussian assumption is a crude approximation of the
-actual feature distributions, and the classifier-driven CUSUM benefits from
-the discriminative training that the Gaussian baseline does not see.
-
 \paragraph{Summary.}
-The CUSUM detector reaches a lower detection delay than the implicit
-$n_{\text{stable}}$ rule at the same false-alarm rate on the farm dataset,
-and exposes a calibratable threshold that the implicit rule does not have.
-On the campus dataset, the heavy-tailed delay distribution of the implicit
-rule (a single transition driving the mean to $\sim 50\,\text{s}$) makes the
-CUSUM advantage even larger in mean delay, although the underlying
-classifier uncertainty on the snowy February sessions remains the limiting
-factor in both detectors.
+On the farm, the CUSUM detector splits the classifier families into two groups. For the slow $n_{\text{stable}}$ detectors (SVM, LR, RF), CUSUM cuts mean detection delay by $\sim 2$--$9\,\text{s}$ at the cost of a $\sim 10$ percentage-point drop in detection rate and the introduction of a small wrong-class rate. For the already-fast MLP and CNN, $n_{\text{stable}}$ remains competitive: their soft posteriors transition cleanly enough that the implicit rule is essentially Bayesian-optimal at the short delay it achieves. Across all models, CUSUM exposes an analytically calibratable threshold and a measurable false-alarm rate, neither of which the implicit rule offers. CUSUM was evaluated only on the farm; the campus $n_{\text{stable}}$ baseline's heavy-tailed delay distribution, where a single uncertain transition drives the mean delay to $\sim 50\,\text{s}$, is exactly the failure mode that an explicit threshold is designed to control, but a quantitative campus comparison is left to future work.
