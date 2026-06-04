@@ -7,10 +7,8 @@ data/labeled/
 data/resampled/
 
 #reports (do not commit some reports)
-reports/raw/Test/
 reports/labeled/
-reports/
-reports/features/
+reports/raw/Test/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
@@ -22,7 +20,10 @@ __pycache__/
 venv/
 
 # Models
-models/
+models/Campus_dataset_B_3class/
+models/Farm/
+models/Main/
+
 
 # OS files
 .DS_Store

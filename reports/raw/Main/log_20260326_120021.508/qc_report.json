@@ -1,0 +1,36 @@
+{
+  "run_id": "log_20260326_120021.508",
+  "source_run_dir": "/Users/pratyush/Desktop/DTU/Bachelor_thesis/BSC_Thesis_intrinsic_sensor_analysis/data/raw/Main/log_20260326_120021.508",
+  "qc_report": {
+    "acc": {
+      "n": 154168,
+      "duration_s": 1850.0146000385284,
+      "fs_med_hz": 83.33275053643806,
+      "dt_med": 0.012000083923339844,
+      "dt_p99": 0.013000011444091797,
+      "dt_max": 0.01810002326965332,
+      "gap_ratio_dtmax_over_dtmed": 1.5083247238337438,
+      "n_gaps_gt_factor_times_med": 0
+    },
+    "gyro": {
+      "n": 154117,
+      "duration_s": 1849.3996999263763,
+      "fs_med_hz": 83.33275053643806,
+      "dt_med": 0.012000083923339844,
+      "dt_p99": 0.013000011444091797,
+      "dt_max": 0.015599966049194336,
+      "gap_ratio_dtmax_over_dtmed": 1.2999880791544147,
+      "n_gaps_gt_factor_times_med": 0
+    },
+    "odo": {
+      "n": 231931,
+      "duration_s": 1855.4468998908997,
+      "fs_med_hz": 129.87069606143174,
+      "dt_med": 0.0076999664306640625,
+      "dt_p99": 0.008800029754638672,
+      "dt_max": 0.014899969100952148,
+      "gap_ratio_dtmax_over_dtmed": 1.9350693584344811,
+      "n_gaps_gt_factor_times_med": 0
+    }
+  }
+}
