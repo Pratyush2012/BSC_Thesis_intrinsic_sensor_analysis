@@ -96,3 +96,72 @@ BSC_Thesis_intrinsic_sensor_analysis/
 ├── data/            # Raw sensor logs (not tracked in git)
 └── environment.yml  # Conda environment specification
 \end{lstlisting}
+
+
+\begin{table}[H]
+\centering
+\caption{Per-fold, per-class diagnostics on the campus dataset under LORO-CV. \textit{Train n} and \textit{Test n} are window counts in the training and held-out partitions for that fold; \textit{Count} is flagged \texttt{LOW} when the training-fold count for that class falls below the threshold used by the diagnostic (here, $\approx 50$ windows), signalling that the model has very little material to learn the class from. \textit{Speed TVD} is the total variation distance between the train- and test-fold per-class speed-bin distributions; \textit{Speed} is flagged \texttt{WARN} when the train and test speed distributions diverge substantially ($\mathrm{TVD} > 0.4$) and \texttt{N/A} when the test fold contains no windows of that class. Source: \texttt{results/Campus/fold\_quality\_diagnostics.csv}.}
+\label{tab:fold_quality_campus}
+\small
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{llrrcrc}
+\toprule
+\textbf{Test fold} & \textbf{Class} & \textbf{Train $n$} & \textbf{Test $n$} & \textbf{Count} & \textbf{Speed TVD} & \textbf{Speed} \\
+\midrule
+\multirow{5}{*}{23 Feb}
+  & cobblestone         & 355 & 0   & OK  & ---   & N/A  \\
+  & dry\_dirt\_track    & 652 & 0   & OK  & ---   & N/A  \\
+  & grass               & 462 & 26  & OK  & 0.058 & OK   \\
+  & muddy\_dirt\_track  & 46  & 99  & LOW & 0.727 & WARN \\
+  & smooth\_terrain     & 538 & 168 & OK  & 0.559 & WARN \\
+\midrule
+\multirow{5}{*}{26 Feb}
+  & cobblestone         & 355 & 0   & OK  & ---   & N/A  \\
+  & dry\_dirt\_track    & 652 & 0   & OK  & ---   & N/A  \\
+  & grass               & 444 & 44  & OK  & 0.151 & OK   \\
+  & muddy\_dirt\_track  & 99  & 46  & OK  & 0.727 & WARN \\
+  & smooth\_terrain     & 651 & 55  & OK  & 0.622 & WARN \\
+\midrule
+\multirow{5}{*}{9 Mar (A)}
+  & cobblestone         & 355 & 0   & OK  & ---   & N/A  \\
+  & dry\_dirt\_track    & 258 & 394 & OK  & 0.208 & OK   \\
+  & grass               & 420 & 68  & OK  & 0.139 & OK   \\
+  & muddy\_dirt\_track  & 145 & 0   & OK  & ---   & N/A  \\
+  & smooth\_terrain     & 504 & 202 & OK  & 0.464 & WARN \\
+\midrule
+\multirow{5}{*}{9 Mar (B)}
+  & cobblestone         & 318 & 37  & OK  & 0.865 & WARN \\
+  & dry\_dirt\_track    & 394 & 258 & OK  & 0.208 & OK   \\
+  & grass               & 240 & 248 & OK  & 0.060 & OK   \\
+  & muddy\_dirt\_track  & 145 & 0   & OK  & ---   & N/A  \\
+  & smooth\_terrain     & 585 & 121 & OK  & 0.515 & WARN \\
+\midrule
+\multirow{5}{*}{26 Mar}
+  & cobblestone         & 37  & 318 & LOW & 0.865 & WARN \\
+  & dry\_dirt\_track    & 652 & 0   & OK  & ---   & N/A  \\
+  & grass               & 386 & 102 & OK  & 0.099 & OK   \\
+  & muddy\_dirt\_track  & 145 & 0   & OK  & ---   & N/A  \\
+  & smooth\_terrain     & 546 & 160 & OK  & 0.200 & OK   \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{Transition-Detection Diagnostic Figures}
+\label{app:transition_figures}
+
+This appendix collects two pedagogical traces referenced from \Cref{sec:res_transition}, both on a representative farm run using the Random Forest classifier. \Cref{fig:transition_timelines} shows the per-window posterior with $n_{\text{stable}} = 5$ detections overlaid; \Cref{fig:cusum_timeline} shows the same posterior together with the running CUSUM statistics $g_c(k)$ and the threshold crossings.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Pictures/Figures/transition_timelines_randomforest.png}
+    \caption{Random Forest per-window posterior on a representative farm run, with the $n_{\text{stable}} = 5$ detections overlaid. Shaded bands are ground-truth class segments; vertical lines mark the implicit detector's alarms.}
+    \label{fig:transition_timelines}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Pictures/Figures/cusum_timeline_randomforest.png}
+    \caption{CUSUM detector trace on the same farm run: the soft posterior (top), the bank of $g_c(k)$ statistics (middle), and the alarm decisions vs.\ the ground-truth transitions (bottom).}
+    \label{fig:cusum_timeline}
+\end{figure}
