@@ -196,8 +196,7 @@ def create_windows(
 
             rows.append(row)
 
-    windows_df = pd.DataFrame(rows)
-    return windows_df
+    return pd.DataFrame(rows)
 
 
 def save_windowed_run(windows_df, output_path):

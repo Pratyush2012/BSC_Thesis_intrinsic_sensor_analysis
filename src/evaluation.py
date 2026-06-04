@@ -1,8 +1,4 @@
-"""Shared evaluation utilities for terrain-classification notebooks.
-
-Centralises the five helper functions that are used across
-07_baslines.ipynb, 07b_dataset_B_3class_baseline.ipynb, and 08_base_tuning.ipynb.
-"""
+"""Shared evaluation utilities for terrain-classification notebooks."""
 
 from __future__ import annotations
 
@@ -18,19 +14,12 @@ from sklearn.svm import SVC
 
 try:
     from xgboost import XGBClassifier
-except ImportError as exc:  # pragma: no cover
+except ImportError as exc:
     raise ImportError("xgboost is required. Install it before importing src.evaluation.") from exc
 
 
 def make_base_models(random_state: int) -> dict[str, Pipeline]:
-    """Return a dict of named sklearn Pipelines (scaler + classifier).
-
-    Args:
-        random_state: Seed passed to every stochastic estimator.
-
-    Returns:
-        ``{'LogisticRegression': ..., 'RandomForest': ..., 'XGBoost': ..., 'SVM': ...}``
-    """
+    """Return a dict of named sklearn Pipelines (scaler + classifier)."""
     return {
         "LogisticRegression": Pipeline([
             ("scaler", StandardScaler()),
@@ -78,20 +67,9 @@ def make_tuned_models(
     random_state: int,
     best_params: dict[str, dict[str, object]],
 ) -> dict[str, Pipeline]:
-    """Return Pipelines identical to make_base_models() but with tuned hyperparameters.
+    """Like make_base_models() but applies tuned hyperparameters per model.
 
-    Starts from the same Pipeline structure as make_base_models() and applies each
-    model's best hyperparameters via Pipeline.set_params(**params). Keys must use the
-    sklearn Pipeline format, e.g. ``clf__C`` for the ``C`` parameter on the ``clf`` step.
-
-    Args:
-        random_state: Seed passed to every stochastic estimator.
-        best_params: Dict mapping model name → Pipeline-format param overrides,
-            e.g. ``{"LogisticRegression": {"clf__C": 0.1}}``.
-            Loaded from ``results/tuning_best_params.json``.
-
-    Returns:
-        Same structure as make_base_models() with tuned params applied.
+    best_params keys use sklearn Pipeline format, e.g. ``{"LogisticRegression": {"clf__C": 0.1}}``.
     """
     models = make_base_models(random_state)
     for model_name, params in best_params.items():
@@ -108,19 +86,8 @@ def compute_fold_metrics(
 ) -> dict[str, object]:
     """Compute per-fold accuracy, macro F1, and per-class metrics.
 
-    Macro F1 is averaged only over *evaluable_classes* (classes present in both
-    the training and test split).  Per-class metrics are set to NaN for any class
-    absent from *evaluable_classes*.
-
-    Args:
-        y_true: Ground-truth labels.
-        y_pred: Predicted labels.
-        evaluable_classes: Classes to include in the macro-F1 average.
-        label_order: Full class list used for the per-class breakdown.
-
-    Returns:
-        Dict with keys ``accuracy``, ``macro_f1``, ``per_class``, ``n_test``,
-        ``degenerate_classes``.
+    Macro F1 is averaged only over *evaluable_classes*. Per-class metrics
+    are NaN for any class absent from *evaluable_classes*.
     """
     y_true = np.asarray(y_true, dtype=object)
     y_pred = np.asarray(y_pred, dtype=object)
@@ -174,15 +141,7 @@ def summarize_group(group: pd.DataFrame) -> pd.Series:
     """Aggregate per-fold metric rows into a summary Series.
 
     Computes mean, std (population), median, IQR, worst-fold value, and a
-    *robustness score* (``macro_f1_mean - 0.5 * macro_f1_std``) for both
-    accuracy and macro-F1.
-
-    Args:
-        group: DataFrame slice from a ``groupby`` containing at least
-               ``accuracy`` and ``macro_f1`` columns.
-
-    Returns:
-        A pandas Series with summary statistics.
+    robustness score (``macro_f1_mean - 0.5 * macro_f1_std``).
     """
     acc = group["accuracy"].dropna()
     mf1 = group["macro_f1"].dropna()
@@ -215,26 +174,14 @@ def summarize_group(group: pd.DataFrame) -> pd.Series:
 
 
 def row_normalize(cm: np.ndarray) -> np.ndarray:
-    """Row-normalise a confusion matrix (divide each row by its sum).
-
-    Rows with zero support are left as zeros.
-
-    Args:
-        cm: Raw integer confusion matrix of shape (n_classes, n_classes).
-
-    Returns:
-        Float array of the same shape with rows summing to 1 (or 0).
-    """
+    """Row-normalise a confusion matrix. Zero-support rows stay as zeros."""
     cm = cm.astype(float)
     row_sums = cm.sum(axis=1, keepdims=True)
     return np.divide(cm, row_sums, out=np.zeros_like(cm, dtype=float), where=row_sums > 0)
 
 
 def fmt_mean_std(series: pd.Series) -> str:
-    """Format a numeric Series as ``'mean +/- std'`` (3 decimal places).
-
-    Returns ``'NaN'`` if the Series is empty after dropping NaNs.
-    """
+    """Format a numeric Series as ``'mean +/- std'`` (3 decimal places)."""
     vals = series.dropna()
     if vals.empty:
         return "NaN"

@@ -1,6 +1,4 @@
 """
-src/change_detection.py
------------------------
 Online CUSUM transition detector for terrain classification.
 
 This is the §6.4 (Blanke et al., 2016) version of the transition analysis.
@@ -10,17 +8,14 @@ Unlike the n_stable rule in src/transition.py, the detector here:
   - works on classifier soft posteriors, not hard argmax labels
   - has a single principled threshold h tied to a target false-alarm rate
 
-The output schema mirrors analyze_transitions() so compare_models(),
+Output schema mirrors analyze_transitions() so compare_models(),
 plot_transition_timeline(), and plot_detection_delay_histogram() in
 src/transition.py keep working unchanged. New columns/keys (false_alarm
 rate, wrong_class outcome) are added on top.
 
 Equation references in comments are to:
     Blanke, Kinnaert, Lunze, Staroswiecki (2016).
-    "Diagnosis and Fault-Tolerant Control", 3rd ed., Springer.
-The PDF I worked from has change-detection in Chapter 6.4, so eq. numbers
-look like (6.62), (6.91), etc. — same content as §7.2 in the ToC of the
-front-matter PDF.
+    "Diagnosis and Fault-Tolerant Control", 3rd ed., Springer (Chapter 6.4).
 """
 
 from __future__ import annotations
@@ -31,9 +26,7 @@ import numpy as np
 import pandas as pd
 
 
-# ===========================================================================
-# CORE: BANK-OF-CUSUMS DETECTOR
-# ===========================================================================
+# Core: bank-of-CUSUMs detector
 
 def cusum_bank(
     proba: np.ndarray,
@@ -43,8 +36,7 @@ def cusum_bank(
     eps: float = 1e-9,
     warmup: int = 0,
 ) -> list[dict]:
-    """
-    Run a bank of CUSUMs over a posterior stream and emit alarm events.
+    """Run a bank of CUSUMs over a posterior stream and emit alarm events.
 
     For each candidate post-change class c != c0 we accumulate the per-step
     log-likelihood ratio (Eq. 6.62 in Blanke et al.):
@@ -52,27 +44,11 @@ def cusum_bank(
         s_c(k) = ln( p_c(k) / p_{c0}(k) )
         g_c(k) = max(0, g_c(k-1) + s_c(k))           # Eq. 6.91 recursive form
 
-    An alarm fires the first time max_c g_c(k) > h. The declared class is
-    the argmax CUSUM, the change-time estimate \hat{k}_0 is recovered from
-    Eq. 6.63 as the argmin of the cumulative sum S_c(j) for j <= k_a, and
-    everything is reset to zero (re-init step of Algorithm 6.3).
+    An alarm fires when max_c g_c(k) > h. The declared class is the argmax
+    CUSUM; the change-time estimate \\hat{k}_0 is recovered from Eq. 6.63 as
+    the argmin of the cumulative sum S_c(j) for j <= k_a, then state resets.
 
-    Args:
-        proba    : (T, C) posterior matrix, time-sorted, rows sum to ~1.
-        classes  : list of length C with class names (the column order of proba).
-        h        : CUSUM threshold. Pick via calibrate_threshold().
-        c0_init  : initial active class. If None, use argmax of the first
-                   non-zero row. If a string it must be in `classes`; if int
-                   it is treated as a column index.
-        eps      : floor for log to avoid log(0) when a class has zero proba.
-        warmup   : number of windows to skip at the start of the stream
-                   (no alarm allowed). Useful when the classifier emits
-                   garbage right at run start.
-
-    Returns:
-        List of dicts, one per alarm:
-            {'k_a': int, 'c_hat': str, 'k0_hat': int, 'g_max': float}
-        sorted by k_a ascending.
+    Returns a list of dicts: {'k_a': int, 'c_hat': str, 'k0_hat': int, 'g_max': float}.
     """
     if proba.ndim != 2:
         raise ValueError(f"proba must be 2-D, got shape {proba.shape}")
@@ -82,48 +58,41 @@ def cusum_bank(
     if T == 0:
         return []
 
-    # Resolve initial active class index
     if c0_init is None:
-        # Use the first row's argmax as the starting hypothesis
         c0_idx = int(np.argmax(proba[0]))
     elif isinstance(c0_init, str):
         c0_idx = classes.index(c0_init)
     else:
         c0_idx = int(c0_init)
 
-    log_p = np.log(np.clip(proba, eps, 1.0))   # (T, C)
+    log_p = np.log(np.clip(proba, eps, 1.0))
 
-    # State for the bank — one CUSUM per non-active class. I keep all C slots
-    # for indexing convenience and just zero out the active one.
+    # State for the bank — one CUSUM per non-active class. Keep all C slots
+    # for indexing convenience; the active one is zeroed at every step.
     g = np.zeros(C, dtype=float)
     S = np.zeros(C, dtype=float)
     # Per-class running min(S_c) and the j at which it occurred — used for
-    # the change-time estimate \hat{k}_0 (Eq. 6.63).
+    # the change-time estimate \\hat{k}_0 (Eq. 6.63).
     S_min = np.zeros(C, dtype=float)
     S_argmin = np.zeros(C, dtype=int)
 
     alarms: list[dict] = []
 
     for k in range(T):
-        # Increment s_c(k) = log p_c - log p_{c0} for every c != c0
         s = log_p[k] - log_p[k, c0_idx]
         g = np.maximum(0.0, g + s)
         S = S + s
-        # Track min(S_c) up to time k for change-time recovery
         update_min = S < S_min
         S_min = np.where(update_min, S, S_min)
         S_argmin = np.where(update_min, k, S_argmin)
-        # The active class's own CUSUM is meaningless (s_{c0} ≡ 0); ignore it
+        # The active class's own CUSUM is meaningless (s_{c0} ≡ 0)
         g[c0_idx] = 0.0
 
         if k < warmup:
             continue
 
-        # Alarm test: max over candidate classes
         c_hat_idx = int(np.argmax(g))
         if g[c_hat_idx] > h:
-            # \hat{k}_0 = argmin_{1<=j<=k_a} S_{c_hat}(j) — the time the
-            # cumulative sum for the winning class last hit its minimum
             k0_hat = int(S_argmin[c_hat_idx])
             alarms.append({
                 "k_a": k,
@@ -141,9 +110,7 @@ def cusum_bank(
     return alarms
 
 
-# ===========================================================================
-# THRESHOLD CALIBRATION
-# ===========================================================================
+# Threshold calibration
 
 def calibrate_threshold(
     proba_train: np.ndarray,
@@ -154,42 +121,18 @@ def calibrate_threshold(
     h_grid: np.ndarray | None = None,
     min_segment_windows: int = 5,
 ) -> dict:
-    """
-    Pick h so that on stationary segments of the training stream, the
-    empirical mean time between alarms ≈ target_mtbfa_sec.
+    """Pick h so that empirical mean time between alarms on stationary segments ≈ target_mtbfa_sec.
 
-    A 'stationary segment' = consecutive windows with the same true label
-    (between successive GT transitions). We run cusum_bank on each segment
-    independently, count alarms, and divide total stationary time by total
-    alarms to get the empirical MTBFA. We then pick the h on the grid whose
-    MTBFA is closest to (and >=) the target — i.e. the loosest h that still
-    meets the false-alarm budget.
+    Stationary segment = consecutive windows with the same true label. We run
+    cusum_bank on each segment independently, sum alarms, and divide total
+    stationary time by total alarms. We pick the smallest h whose MTBFA meets
+    the target — Algorithm 6.6 in Blanke et al.
 
-    This corresponds to step "Choose h to meet specified mean time between
-    false alarms" of Algorithm 6.6 in Blanke et al.
-
-    Args:
-        proba_train         : (T, C) posteriors, concatenated training stream.
-        labels_train        : (T,) true class names, same order as proba_train.
-        classes             : column order of proba_train.
-        target_mtbfa_sec    : desired mean time between false alarms (seconds).
-        step_sec            : seconds per window (window step). 1.0 by default.
-        h_grid              : array of h values to try. Default: np.linspace(1, 50, 50).
-        min_segment_windows : skip stationary segments shorter than this
-                              (too short for any alarm to fire anyway).
-
-    Returns:
-        Dict with keys:
-            'h'              : chosen threshold
-            'h_grid'         : array of tried h values
-            'mtbfa_grid'     : empirical MTBFA per h (seconds; np.inf if zero alarms)
-            'alarms_grid'    : alarms per h (int)
-            'stationary_sec' : total stationary time used (seconds)
+    Returns: {'h', 'h_grid', 'mtbfa_grid', 'alarms_grid', 'stationary_sec'}.
     """
     if h_grid is None:
         h_grid = np.linspace(1.0, 50.0, 50)
 
-    # Slice the training stream into stationary segments
     labels = np.asarray(labels_train).astype(str)
     n = len(labels)
     if n != len(proba_train):
@@ -217,9 +160,8 @@ def calibrate_threshold(
         for s, e in segments:
             seg_proba = proba_train[s:e]
             seg_label = labels[s]
-            # Initialise the active class to the segment's true label —
-            # otherwise the very first alarm at the segment start would be
-            # spurious (the bank would 'discover' the label).
+            # Initialise active class to the segment's true label — otherwise
+            # the bank would 'discover' the label at the segment start.
             seg_alarms = cusum_bank(
                 seg_proba, classes, h=h, c0_init=seg_label,
             )
@@ -228,8 +170,7 @@ def calibrate_threshold(
         mtbfa_per_h.append(stationary_sec / n_alarms if n_alarms > 0 else np.inf)
 
     mtbfa_arr = np.array(mtbfa_per_h)
-    # Pick the smallest h whose empirical MTBFA >= target. If none meets,
-    # fall back to the largest h (most conservative).
+    # Pick the smallest h whose empirical MTBFA >= target; fall back to largest h if none meets.
     meeting = np.where(mtbfa_arr >= target_mtbfa_sec)[0]
     if len(meeting) == 0:
         chosen_idx = int(np.argmax(h_grid))
@@ -245,9 +186,7 @@ def calibrate_threshold(
     }
 
 
-# ===========================================================================
-# ALARM ↔ GT MATCHING
-# ===========================================================================
+# Alarm ↔ GT matching
 
 def match_alarms_to_gt(
     alarms: list[dict],
@@ -259,47 +198,22 @@ def match_alarms_to_gt(
     n_stable: int = 3,
     threshold_sec: float = 10.0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Pair detector alarms with ground-truth transitions and produce a
-    transitions_df with the same columns as analyze_transitions().
+    """Pair detector alarms with ground-truth transitions.
 
-    Pairing rule (per the report's "Evaluation against GT" section):
+    Pairing rule per the report's "Evaluation against GT" section:
         For each GT transition (t_k, ℓ_k) with bound (t_k - grace, t_{k+1}):
-          - first alarm in that window with c_hat == ℓ_k → 'detected'
-          - first alarm in that window with c_hat != ℓ_k → 'wrong_class'
-          - no alarm in that window                      → 'missed'
-          - too few windows remain after t_k             → 'boundary'
+          - first alarm in window with c_hat == ℓ_k → 'detected'
+          - first alarm in window with c_hat != ℓ_k → 'wrong_class'
+          - no alarm in window                     → 'missed'
+          - too few windows remain after t_k       → 'boundary'
         Any alarm NOT consumed by a GT pairing is logged as a 'false_alarm'.
 
-    Args:
-        alarms         : output of cusum_bank() — list of {k_a, c_hat, k0_hat, g_max}
-        gt_transitions : output of detect_gt_transitions() for this run
-        n_windows      : len(run_df), used for the boundary check
-        times          : (n_windows,) array of t_start per window — gives
-                         absolute seconds for delay computation
-        run_id         : tagged onto every output row
-        grace_windows  : how many windows BEFORE t_k still count as the same
-                         transition (CUSUM can fire on the last pre-change
-                         window if the change is sharp). 1 by default.
-        n_stable      : carried through to the boundary check, mirroring
-                         analyze_transitions(), so the comparison is fair.
-        threshold_sec  : delays > this are flagged is_late=True.
-
-    Returns:
-        (transitions_df, false_alarms_df)
-
-        transitions_df columns (same as analyze_transitions, plus 'g_max'):
-            run_id, transition_idx, from_label, to_label, gt_time,
-            detection_time, detection_delay_sec, outcome, is_late, n_stable_used, g_max
-
-        false_alarms_df columns:
-            run_id, k_a, alarm_time, c_hat, g_max
+    Returns (transitions_df, false_alarms_df) with same columns as analyze_transitions plus g_max.
     """
     rows: list[dict] = []
     used_alarm_idx: set[int] = set()
     times = np.asarray(times)
 
-    # Pre-compute alarm k_a indices for fast windowed lookup
     alarm_ks = np.array([a["k_a"] for a in alarms], dtype=int) if alarms else np.array([], dtype=int)
 
     for k_idx, trans in enumerate(gt_transitions):
@@ -309,8 +223,7 @@ def match_alarms_to_gt(
         target = trans["to_label"]
         gt_time = trans["gt_time"]
 
-        # Boundary: not enough windows remain to observe a meaningful detection.
-        # Mirror analyze_transitions() so the two detectors are comparable.
+        # Boundary: mirror analyze_transitions() so detectors are comparable
         if t_idx + n_stable > n_windows:
             rows.append({
                 "run_id": run_id,
@@ -327,7 +240,6 @@ def match_alarms_to_gt(
             })
             continue
 
-        # Find first alarm in [t_idx - grace, next_t_idx)
         lo = t_idx - grace_windows
         hi = next_t_idx
         candidates = [i for i, k in enumerate(alarm_ks)
@@ -349,13 +261,11 @@ def match_alarms_to_gt(
             })
             continue
 
-        # Pick the earliest candidate (by k_a)
         first_i = min(candidates, key=lambda i: alarm_ks[i])
         used_alarm_idx.add(first_i)
         a = alarms[first_i]
         det_time = float(times[a["k_a"]])
-        # Delay can be negative if the alarm fires inside the grace window
-        # before t_k — clamp to 0 so the metric stays interpretable.
+        # Delay can be negative if alarm fires inside grace window before t_k — clamp to 0
         delay = max(0.0, det_time - gt_time)
         outcome = "detected" if a["c_hat"] == target else "wrong_class"
 
@@ -379,7 +289,6 @@ def match_alarms_to_gt(
         "n_stable_used", "g_max",
     ])
 
-    # Anything not consumed = false alarm
     fa_rows = []
     for i, a in enumerate(alarms):
         if i in used_alarm_idx:
@@ -398,9 +307,7 @@ def match_alarms_to_gt(
     return transitions_df, false_alarms_df
 
 
-# ===========================================================================
-# DROP-IN REPLACEMENT FOR analyze_transitions()
-# ===========================================================================
+# Drop-in replacement for analyze_transitions()
 
 def analyze_transitions_cusum(
     df: pd.DataFrame,
@@ -414,32 +321,10 @@ def analyze_transitions_cusum(
     threshold_sec: float = 10.0,
     warmup: int = 0,
 ) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
-    """
-    Same call signature spirit as analyze_transitions() but using CUSUM.
+    """Per-run CUSUM analysis with same call signature spirit as analyze_transitions().
 
-    This is the function the notebook calls per run. It:
-      1. Detects GT transitions exactly like analyze_transitions().
-      2. Runs cusum_bank() on the run's proba slice.
-      3. Matches alarms to GT transitions.
-      4. Returns (transitions_df, summary, false_alarms_df) with the same
-         columns/keys as analyze_transitions(), plus extra ones for
-         wrong-class and false-alarm counts.
-
-    Args:
-        df            : single-run, time-sorted DataFrame with [time_col, true_col].
-        proba         : (T, C) posterior matrix for THIS run's rows of df,
-                         in the same row order as df.
-        classes       : column names of proba.
-        h             : CUSUM threshold (from calibrate_threshold()).
-        grace_windows : passed to match_alarms_to_gt.
-        n_stable      : only used for the boundary rule (kept for parity
-                         with analyze_transitions()).
-        threshold_sec : delays > this flagged is_late=True.
-        warmup        : passed to cusum_bank() — no alarms in the first
-                         `warmup` windows.
-
-    Returns:
-        transitions_df, summary, false_alarms_df
+    Returns (transitions_df, summary, false_alarms_df) with the same columns/keys
+    as analyze_transitions(), plus extras for wrong-class and false-alarm counts.
     """
     # Local import to avoid a circular dep at module load
     from src.transition import detect_gt_transitions
@@ -452,11 +337,10 @@ def analyze_transitions_cusum(
     run_id = df["run_id"].iloc[0] if "run_id" in df.columns else "unknown"
     times = df[time_col].to_numpy()
 
-    # Initialise active class to the run's first true label so CUSUM doesn't
-    # fire a spurious "discovery" alarm at t=0.
+    # Init active class to run's first true label so CUSUM doesn't fire a spurious "discovery" at t=0
     init_label = str(df[true_col].iloc[0])
     if init_label not in classes:
-        init_label = None  # let cusum_bank fall back to argmax of row 0
+        init_label = None
 
     alarms = cusum_bank(proba, classes, h=h, c0_init=init_label, warmup=warmup)
     gt_transitions = detect_gt_transitions(df, time_col=time_col, true_col=true_col)
@@ -472,7 +356,6 @@ def analyze_transitions_cusum(
         threshold_sec=threshold_sec,
     )
 
-    # Summary stats — same keys as analyze_transitions(), plus new ones
     n_total = len(transitions_df)
     n_detected = int((transitions_df["outcome"] == "detected").sum())
     n_wrong = int((transitions_df["outcome"] == "wrong_class").sum())
@@ -484,9 +367,7 @@ def analyze_transitions_cusum(
         transitions_df["outcome"] == "detected", "detection_delay_sec"
     ]
 
-    # False-alarm rate in alarms / minute, using the run's stationary time
-    # (everything not within grace of a GT transition). For simplicity I use
-    # total run duration — close enough when the run has many GT transitions.
+    # False-alarm rate per minute using total run duration as exposure proxy
     run_duration_sec = float(times[-1] - times[0]) if len(times) > 1 else float("nan")
     fa_per_min = (len(false_alarms_df) / (run_duration_sec / 60.0)
                   if run_duration_sec and run_duration_sec > 0 else float("nan"))
@@ -524,23 +405,11 @@ def compare_models_cusum(
     threshold_sec: float = 10.0,
     warmup: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Multi-model multi-run wrapper that mirrors compare_models() but runs
-    the CUSUM detector. Output transitions_df is column-compatible with
-    compare_models() so plot_transition_timeline() and
-    plot_detection_delay_histogram() work without any change.
+    """Multi-model multi-run CUSUM wrapper. Output is column-compatible with compare_models().
 
     Args:
-        df          : full feature DataFrame with run_col, time_col, true_col.
-        proba_dict  : {model_name: (proba_full, classes)} — proba_full is the
-                       (N_total_windows, C) matrix from run_*_loro_cv_proba(),
-                       row-aligned to df.index.
-        h_dict      : {model_name: h} — chosen threshold per model (same model
-                       can have a different h since posteriors are sharper for
-                       some models than others).
-
-    Returns:
-        (combined_transitions_df, combined_false_alarms_df)
+        proba_dict : {model_name: (proba_full, classes)} — proba_full row-aligned to df.index.
+        h_dict     : {model_name: h} — per-model threshold (posteriors are sharper for some models).
     """
     run_ids = sorted(df[run_col].unique().tolist())
     all_trans: list[pd.DataFrame] = []
@@ -556,7 +425,6 @@ def compare_models_cusum(
         for run_id in run_ids:
             run_mask = df[run_col].astype(str) == str(run_id)
             run_pos = np.where(run_mask.to_numpy())[0]
-            # Sort positions by time so proba rows line up with sorted df
             time_order = np.argsort(df.iloc[run_pos][time_col].to_numpy())
             sorted_pos = run_pos[time_order]
 
@@ -603,9 +471,7 @@ def compare_models_cusum(
     return combined, combined_fa
 
 
-# ===========================================================================
-# OPERATING-CURVE SWEEP
-# ===========================================================================
+# Operating-curve sweep
 
 def operating_curve(
     df: pd.DataFrame,
@@ -619,18 +485,7 @@ def operating_curve(
     n_stable: int = 3,
     threshold_sec: float = 10.0,
 ) -> pd.DataFrame:
-    """
-    Sweep h and report (mean delay, false-alarm rate, detection rate) for
-    each value. This is the §6.4 equivalent of the n_stable sweep already
-    in notebook 12 — plot one curve per detector type to compare them
-    directly on the same axes.
-
-    Returns a DataFrame with one row per h value:
-        h, n_alarms, n_detected, n_wrong, n_missed, n_boundary,
-        n_false_alarms, detection_rate, wrong_class_rate,
-        mean_delay_sec, median_delay_sec, false_alarm_rate_per_min
-    """
-    # Build one fake h_dict per call so we can reuse compare_models_cusum
+    """Sweep h and report (mean delay, false-alarm rate, detection rate) per value."""
     rows = []
     fake = {"_": (proba_full, classes)}
     for h in h_grid:
@@ -654,8 +509,7 @@ def operating_curve(
         eff = n_total - n_bnd
         delays = trans.loc[trans["outcome"] == "detected", "detection_delay_sec"]
 
-        # Total run time across all runs — use it as the "exposure" for the
-        # false-alarm rate
+        # Total run time across all runs — used as exposure for false-alarm rate
         total_sec = 0.0
         for run_id in df[run_col].unique():
             t = df.loc[df[run_col] == run_id, time_col].to_numpy()

@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-"""Preprocessing helpers for IMU + odometry runs.
-
-This module owns:
-- QC summaries
-- timeline synchronization/resampling
-- motion metrics and stationary masking
-- leakage-safe split helpers (run-level)
+"""Preprocessing helpers for IMU + odometry runs: QC summaries,
+timeline synchronization/resampling, motion metrics, leakage-safe split helpers.
 """
 
 from pathlib import Path
@@ -25,22 +20,10 @@ def resample_sensors(
     tcol: str = "t_rel",
     method: str = "linear",
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Resample accelerometer, gyroscope, and odometry to a common sample rate.
+    """Resample acc, gyro, and odo to a common sample rate.
 
     Creates a unified time grid spanning all three sensors and interpolates each
-    to that grid.  The label column, if present, is forward-filled (nearest prior
-    label) rather than interpolated.
-
-    Args:
-        acc: Accelerometer DataFrame with a time column and signal columns.
-        gyro: Gyroscope DataFrame.
-        odo: Odometry DataFrame.
-        target_hz: Target sample rate in Hz (default: 100).
-        tcol: Name of the time column (default: 't_rel').
-        method: Interpolation method — ``'linear'`` or ``'nearest'``.
-
-    Returns:
-        Tuple of ``(acc_resampled, gyro_resampled, odo_resampled)``.
+    to that grid. The label column, if present, is forward-filled rather than interpolated.
     """
     t_min = min(acc[tcol].min(), gyro[tcol].min(), odo[tcol].min())
     t_max = max(acc[tcol].max(), gyro[tcol].max(), odo[tcol].max())
@@ -73,11 +56,7 @@ def resample_sensors(
 
 
 def qc_stats(df: pd.DataFrame, tcol: str = "t_rel", gap_factor: float = 5.0) -> dict[str, float | int]:
-    """Compute compact timing/QC statistics for a sensor frame.
-
-    These stats are aimed at spotting timestamp issues (gaps, jitter, low rate).
-    """
-
+    """Compact timing/QC stats for a sensor frame (gaps, jitter, sample rate)."""
     if len(df) < 2:
         return {
             "n": int(len(df)),
@@ -94,7 +73,6 @@ def qc_stats(df: pd.DataFrame, tcol: str = "t_rel", gap_factor: float = 5.0) -> 
     med = float(np.median(dt))
     dt_max = float(np.max(dt))
     return {
-        # `duration_s` assumes the frame is sorted by `tcol` (enforced at load time).
         "n": int(len(df)),
         "duration_s": float(df[tcol].iloc[-1] - df[tcol].iloc[0]),
         "fs_med_hz": float(1.0 / med) if med > 0 else float("nan"),
@@ -108,7 +86,6 @@ def qc_stats(df: pd.DataFrame, tcol: str = "t_rel", gap_factor: float = 5.0) -> 
 
 def qc_report(sensor_frames: dict[str, pd.DataFrame], tcol: str = "t_rel") -> pd.DataFrame:
     """Build a table of `qc_stats` rows for each named sensor frame."""
-
     rows = []
     for sensor_name, frame in sensor_frames.items():
         row = {"sensor": sensor_name}
@@ -125,7 +102,6 @@ def plot_sanity(
     show: bool = True,
 ) -> plt.Figure:
     """Plot per-sensor sanity panels for one run."""
-
     fig, axes = plt.subplots(3, 2, figsize=(12, 10), sharex="col")
 
     axes[0, 0].plot(acc[tcol], acc["ax"], label="ax")
@@ -185,7 +161,6 @@ def plot_dt_diagnostics(
     show: bool = True,
 ) -> plt.Figure | None:
     """Plot dt histogram and dt-vs-time for one sensor frame."""
-
     if len(df) < 2:
         return None
 
@@ -218,7 +193,6 @@ def bias_from_first_seconds(
     seconds: float = 5.0,
 ) -> pd.Series:
     """Estimate channel means over an initial time window."""
-
     seg = df[df[tcol] <= seconds]
     if seg.empty:
         return pd.Series(index=cols, dtype=float)
@@ -226,8 +200,6 @@ def bias_from_first_seconds(
 
 
 def time_range(df: pd.DataFrame, tcol: str = "t_rel") -> tuple[float, float]:
-    """Return min/max time for a frame."""
-
     return float(df[tcol].min()), float(df[tcol].max())
 
 
@@ -237,7 +209,6 @@ def sensor_channel_checks(
     sensor_name: str,
 ) -> pd.DataFrame:
     """Check value ranges and potential clipping/frozen-sample symptoms."""
-
     rows = []
     for ch in channels:
         s = df[ch].dropna()
@@ -305,8 +276,7 @@ def build_dataset_qc_table(
     min_duration_s: float = 30.0,
     expected_fs_ranges: dict[str, tuple[float, float]] | None = None,
 ) -> pd.DataFrame:
-    """Build a run-level QC table with flattened sensor metrics and hard pass/fail flags."""
-
+    """Build a run-level QC table with flattened sensor metrics and pass/fail flags."""
     if expected_fs_ranges is None:
         expected_fs_ranges = {
             "acc": (70.0, 100.0),
@@ -347,7 +317,6 @@ def split_qc_pass_fail(
     dataset_qc: pd.DataFrame, pass_col: str = "pass_all"
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str]]:
     """Split a run-level QC table into passing/failing subsets and run ID lists."""
-
     if pass_col not in dataset_qc.columns:
         raise KeyError(f"Missing column: {pass_col}")
     good = dataset_qc[dataset_qc[pass_col]].copy()
@@ -363,7 +332,6 @@ def save_qc_outputs(
     dpi: int = 150,
 ) -> None:
     """Save per-run QC report JSON and sanity plot, mirroring raw-root folder labels."""
-
     raw_root = Path(raw_root).resolve()
     out_root = Path(out_root)
     out_root.mkdir(parents=True, exist_ok=True)

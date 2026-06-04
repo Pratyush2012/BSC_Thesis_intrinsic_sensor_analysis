@@ -1,10 +1,8 @@
 """
-src/transition.py
------------------
 Terrain transition detection analysis for windowed IMU + odometry data.
 
-A 'ground-truth transition' is defined as any consecutive pair of windows
-(sorted by t_start within a run) where the true label changes.
+A 'ground-truth transition' is any consecutive pair of windows (sorted by
+t_start within a run) where the true label changes.
 
 A 'stable detection' requires n_stable consecutive predicted windows that all
 carry the target label, starting from the first window of the new GT epoch.
@@ -26,9 +24,7 @@ import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 import seaborn as sns
 
-# ---------------------------------------------------------------------------
 # Optional deep-learning imports (only needed for MLP / CNN prediction generation)
-# ---------------------------------------------------------------------------
 try:
     import torch
     import torch.nn as nn
@@ -42,9 +38,6 @@ except ImportError:
 
 from sklearn.utils.class_weight import compute_sample_weight
 
-# ---------------------------------------------------------------------------
-# Project imports
-# ---------------------------------------------------------------------------
 import sys
 from pathlib import Path
 
@@ -54,22 +47,17 @@ if str(_HERE) not in sys.path:
 
 from src.evaluation import make_base_models, make_tuned_models
 
-# ===========================================================================
-# CONSTANTS
-# ===========================================================================
 
 ID_COLS: list[str] = [
     "window_id", "run_id", "segment_id", "label",
     "t_start", "t_end", "n_samples",
 ]
 
-# Signal channels used by the CNN (gy/yaw excluded — encodes steering, not terrain)
+# CNN signal channels (gy/yaw excluded — encodes steering, not terrain)
 SIGNAL_COLS: list[str] = ["ax", "ay", "az", "gx", "gz"]
 
-# ===========================================================================
-# PYTORCH MODEL CLASSES
-# (Copied verbatim from notebooks 09_mlp.ipynb and 10_CNN.ipynb)
-# ===========================================================================
+
+# PyTorch model classes (copied verbatim from notebooks 09_mlp.ipynb and 10_CNN.ipynb)
 
 if _TORCH_AVAILABLE:
 
@@ -87,18 +75,10 @@ if _TORCH_AVAILABLE:
             return self.X[idx], self.y[idx]
 
     class TerrainMLP(nn.Module):
-        """
-        Multi-Layer Perceptron for terrain classification.
+        """MLP for terrain classification.
 
-        Architecture: Linear → BatchNorm → ReLU → Dropout → ... → Linear (raw logits).
-        CrossEntropyLoss applies softmax internally; the output layer has no activation.
-
-        Args:
-            input_dim: Number of input features.
-            hidden_dims: List of hidden layer widths, e.g. [256, 128, 64].
-            num_classes: Number of terrain classes.
-            dropout_rate: Dropout probability.
-            use_batch_norm: Apply BatchNorm after each linear layer.
+        Linear → BatchNorm → ReLU → Dropout stack, ending in raw logits.
+        CrossEntropyLoss applies softmax internally.
         """
 
         def __init__(
@@ -126,19 +106,10 @@ if _TORCH_AVAILABLE:
             return self.output_layer(self.hidden_layers(x))
 
     class TerrainCNN1D(nn.Module):
-        """
-        1D Convolutional Neural Network for terrain classification from raw IMU windows.
+        """1D CNN for terrain classification from raw IMU windows.
 
-        Architecture:
-            Variable convolutional blocks (Conv1d → BN → ReLU → MaxPool),
-            AdaptiveAvgPool, then a 2-layer FC head (raw logits).
-
-        Args:
-            in_channels: Number of input sensor channels (default 5: ax,ay,az,gx,gz).
-            num_classes: Number of terrain classes.
-            filters: Output channels per conv block (default [32, 64, 128]).
-            kernels: Kernel size per conv block (default [7, 5, 3]).
-            dropout_rate: Dropout probability in the FC head.
+        Variable conv blocks (Conv1d → BN → ReLU → MaxPool), AdaptiveAvgPool,
+        then a 2-layer FC head (raw logits).
         """
 
         def __init__(
@@ -181,9 +152,7 @@ if _TORCH_AVAILABLE:
             x = self.global_pool(x).squeeze(-1)
             return self.head(x)
 
-    # -----------------------------------------------------------------------
     # Training utilities
-    # -----------------------------------------------------------------------
 
     def _train_one_epoch(
         model: nn.Module,
@@ -226,12 +195,7 @@ if _TORCH_AVAILABLE:
         return total_loss / max(batch_count, 1), np.concatenate(preds)
 
     def _build_X_tensor(df: pd.DataFrame) -> torch.Tensor:
-        """
-        Stack raw signal series columns into a float32 tensor of shape (N, C, T).
-
-        Expects df to have columns '{col}__series' for each col in SIGNAL_COLS,
-        where each cell is a 1-D numpy array of length T (= 200 for 2-second windows).
-        """
+        """Stack raw signal series columns into a float32 tensor of shape (N, C, T)."""
         arrays = [np.stack(df[f"{c}__series"].values) for c in SIGNAL_COLS]
         return torch.tensor(np.stack(arrays, axis=1), dtype=torch.float32)
 
@@ -246,10 +210,7 @@ if _TORCH_AVAILABLE:
         max_epochs: int,
         patience: int,
     ) -> nn.Module:
-        """
-        Train model with early stopping. Restores best-validation-loss weights.
-        Returns the trained model.
-        """
+        """Train model with early stopping. Restores best-val-loss weights."""
         best_val_loss = float("inf")
         patience_counter = 0
         best_state: dict | None = None
@@ -273,9 +234,7 @@ if _TORCH_AVAILABLE:
         return model
 
 
-# ===========================================================================
-# PREDICTION GENERATION — CLASSICAL MODELS (sklearn Pipelines)
-# ===========================================================================
+# Prediction generation — classical models (sklearn Pipelines)
 
 def run_classical_loro_cv(
     df: pd.DataFrame,
@@ -287,29 +246,12 @@ def run_classical_loro_cv(
     random_state: int = 42,
     best_params: dict | None = None,
 ) -> pd.DataFrame:
-    """
-    Generate per-window predictions for a classical model via LORO-CV.
+    """Generate per-window predictions for a classical model via LORO-CV.
 
-    Mirrors the evaluation loop in 07_baslines.ipynb exactly:
-    - StandardScaler + classifier in a Pipeline (fitted on train fold only).
-    - XGBoost: LabelEncoder + sample weights for balanced mode.
-    - Others: class_weight='balanced' when imbalance='balanced'.
+    Mirrors the evaluation loop in 07_baslines.ipynb. XGBoost uses LabelEncoder
+    + sample weights for balanced mode; others use class_weight='balanced'.
 
-    Args:
-        df: Feature DataFrame (dataset_A_pruned_5run.csv).
-        feature_cols: Feature column names.
-        label_col: Ground-truth label column.
-        run_col: Run identifier column.
-        model_name: One of 'RandomForest', 'XGBoost', 'LogisticRegression', 'SVM'.
-        imbalance: 'balanced' or 'unweighted'.
-        random_state: Reproducibility seed.
-        best_params: If provided, tuned hyperparameters applied via make_tuned_models().
-            Keys use sklearn Pipeline format, e.g. ``{"LogisticRegression": {"clf__C": 0.1}}``.
-            Loaded from ``results/tuning_best_params.json``. When None, default
-            make_base_models() parameters are used.
-
-    Returns:
-        Copy of df with added 'pred_label' column (string labels, index-aligned).
+    Returns a copy of df with added 'pred_label' column.
     """
     run_ids = sorted(df[run_col].unique().tolist())
     pred_labels = pd.Series(index=df.index, dtype=object)
@@ -339,7 +281,6 @@ def run_classical_loro_cv(
             else:
                 pipeline.fit(X_train, y_train_enc)
             y_pred_enc = pipeline.predict(X_test)
-            # Clip to valid range in case of any encoding edge case
             y_pred_enc = np.clip(y_pred_enc, 0, len(le.classes_) - 1).astype(int)
             y_pred = le.inverse_transform(y_pred_enc)
         else:
@@ -347,7 +288,7 @@ def run_classical_loro_cv(
                 try:
                     pipeline.set_params(clf__class_weight="balanced")
                 except ValueError:
-                    pass  # SVC with random_state doesn't always expose this cleanly
+                    pass
             pipeline.fit(X_train, y_train_str)
             y_pred = pipeline.predict(X_test)
 
@@ -358,9 +299,7 @@ def run_classical_loro_cv(
     return result
 
 
-# ===========================================================================
-# PREDICTION GENERATION — MLP
-# ===========================================================================
+# Prediction generation — MLP
 
 def run_mlp_loro_cv(
     df: pd.DataFrame,
@@ -377,33 +316,9 @@ def run_mlp_loro_cv(
     val_split: float = 0.15,
     random_state: int = 42,
 ) -> pd.DataFrame:
-    """
-    Generate per-window predictions for the MLP via LORO-CV.
+    """Generate per-window predictions for the MLP via LORO-CV (mirrors 09_mlp.ipynb).
 
-    Mirrors the training loop in 09_mlp.ipynb exactly:
-    - StandardScaler fitted on train fold only.
-    - LabelEncoder fitted on train fold only.
-    - Class weights: N / (n_classes * count[i]).
-    - 85/15 stratified train/val split; early stopping on val loss.
-    - CosineAnnealingLR scheduler.
-
-    Args:
-        df: Feature DataFrame with metadata + feature columns.
-        feature_cols: List of feature column names.
-        label_col: Ground-truth label column.
-        run_col: Run identifier column.
-        hidden_dims: Hidden layer widths (default [256, 128, 64]).
-        dropout_rate: Dropout probability (default 0.3).
-        batch_size: Mini-batch size (default 32).
-        max_epochs: Maximum training epochs (default 200).
-        patience: Early stopping patience (default 20).
-        learning_rate: Adam learning rate (default 1e-3).
-        weight_decay: L2 regularisation (default 1e-4).
-        val_split: Validation fraction within training fold (default 0.15).
-        random_state: Reproducibility seed.
-
-    Returns:
-        Copy of df with added 'pred_label' column.
+    Returns a copy of df with added 'pred_label' column.
     """
     if not _TORCH_AVAILABLE:
         raise ImportError("PyTorch is required for run_mlp_loro_cv. Install torch.")
@@ -422,12 +337,10 @@ def run_mlp_loro_cv(
         y_train_str = df.loc[train_mask, label_col].astype(str).to_numpy()
         y_test_str = df.loc[test_mask, label_col].astype(str).to_numpy()
 
-        # Scale features (fit on train only)
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(df.loc[train_mask, feature_cols])
         X_test_scaled = scaler.transform(df.loc[test_mask, feature_cols])
 
-        # Stratified train/val split
         X_tr, X_val, y_tr_str, y_val_str = train_test_split(
             X_train_scaled, y_train_str,
             test_size=val_split,
@@ -435,24 +348,20 @@ def run_mlp_loro_cv(
             random_state=random_state,
         )
 
-        # Label encoding (fit on train split only)
         le = LabelEncoder()
         y_tr_enc = le.fit_transform(y_tr_str)
         y_val_enc = le.transform(y_val_str)
         y_test_enc = le.transform(y_test_str)
 
-        # Class weights
         n_classes = len(le.classes_)
         counts = np.bincount(y_tr_enc, minlength=n_classes).astype(float)
         cw = len(y_tr_enc) / (n_classes * np.maximum(counts, 1))
         cw_tensor = torch.tensor(cw, dtype=torch.float32).to(device)
 
-        # Data loaders
         train_loader = DataLoader(TerrainDataset(X_tr, y_tr_enc), batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(TerrainDataset(X_val, y_val_enc), batch_size=batch_size, shuffle=False)
         test_loader = DataLoader(TerrainDataset(X_test_scaled, y_test_enc), batch_size=batch_size, shuffle=False)
 
-        # Model
         model = TerrainMLP(
             input_dim=X_tr.shape[1],
             hidden_dims=hidden_dims,
@@ -471,7 +380,6 @@ def run_mlp_loro_cv(
             scheduler, device, max_epochs, patience,
         )
 
-        # Inference
         _, y_pred_enc = _evaluate(model, test_loader, nn.CrossEntropyLoss(), device)
         y_pred = le.inverse_transform(y_pred_enc)
         pred_labels.loc[test_mask] = y_pred
@@ -483,9 +391,7 @@ def run_mlp_loro_cv(
     return result
 
 
-# ===========================================================================
-# PREDICTION GENERATION — CNN
-# ===========================================================================
+# Prediction generation — CNN
 
 def run_cnn_loro_cv(
     feature_df: pd.DataFrame,
@@ -503,37 +409,10 @@ def run_cnn_loro_cv(
     val_split: float = 0.15,
     random_state: int = 42,
 ) -> pd.DataFrame:
-    """
-    Generate per-window predictions for the CNN via LORO-CV.
+    """Generate per-window predictions for the CNN via LORO-CV (mirrors 10_CNN.ipynb).
 
-    Mirrors the training loop in 10_CNN.ipynb exactly:
-    - No signal normalisation (CNN learns scale from data).
-    - LabelEncoder fitted on train fold only.
-    - Class weights: N / (n_classes * count[i]).
-    - 85/15 stratified train/val split; early stopping on val loss.
-    - CosineAnnealingLR scheduler.
-
-    Args:
-        feature_df: Feature DataFrame (dataset_A_pruned_5run.csv) — used for
-                    metadata alignment (run_id, label, t_start, index).
-        cnn_df: Raw-window parquet DataFrame (raw_windows_cnn.parquet) — must
-                contain '{col}__series' columns for each col in SIGNAL_COLS.
-                Its index must align with feature_df (same window_id order).
-        label_col: Ground-truth label column.
-        run_col: Run identifier column.
-        filters: Conv filter sizes (default [32, 64, 128]).
-        kernels: Conv kernel sizes (default [7, 5, 3]).
-        dropout_rate: Dropout probability (default 0.3).
-        batch_size: Mini-batch size (default 32).
-        max_epochs: Maximum training epochs (default 100).
-        patience: Early stopping patience (default 15).
-        learning_rate: Adam learning rate (default 1e-3).
-        weight_decay: L2 regularisation (default 1e-4).
-        val_split: Validation fraction (default 0.15).
-        random_state: Reproducibility seed.
-
-    Returns:
-        Copy of feature_df with added 'pred_label' column (index-aligned).
+    cnn_df is realigned to feature_df by window_id; raw signals (no normalisation)
+    feed the CNN. Returns a copy of feature_df with added 'pred_label' column.
     """
     if not _TORCH_AVAILABLE:
         raise ImportError("PyTorch is required for run_cnn_loro_cv. Install torch.")
@@ -546,7 +425,6 @@ def run_cnn_loro_cv(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     run_ids = sorted(feature_df[run_col].unique().tolist())
 
-    # Align cnn_df to feature_df by window_id
     if "window_id" in feature_df.columns and "window_id" in cnn_df.columns:
         cnn_df = cnn_df.set_index("window_id").loc[feature_df["window_id"].values].reset_index()
         cnn_df.index = feature_df.index
@@ -574,16 +452,13 @@ def run_cnn_loro_cv(
         y_train_str = feature_df.loc[train_mask, label_col].astype(str).to_numpy()
         y_test_str = feature_df.loc[test_mask, label_col].astype(str).to_numpy()
 
-        # Build (N, C, T) signal tensors
         X_train_t = _build_X_tensor(cnn_df.loc[train_mask])
         X_test_t = _build_X_tensor(cnn_df.loc[test_mask])
 
-        # Label encoding
         le = LabelEncoder()
         y_train_enc = le.fit_transform(y_train_str)
         y_test_enc = le.transform(y_test_str)
 
-        # Stratified train/val split
         X_tr, X_val, y_tr_enc, y_val_enc = train_test_split(
             X_train_t, y_train_enc,
             test_size=val_split,
@@ -591,13 +466,11 @@ def run_cnn_loro_cv(
             random_state=random_state,
         )
 
-        # Class weights
         n_classes = len(le.classes_)
         counts = np.bincount(y_tr_enc, minlength=n_classes).astype(float)
         cw = len(y_tr_enc) / (n_classes * np.maximum(counts, 1))
         cw_tensor = torch.tensor(cw, dtype=torch.float32).to(device)
 
-        # Data loaders
         train_ds = TensorDataset(X_tr, torch.from_numpy(y_tr_enc.astype(np.int64)))
         val_ds = TensorDataset(X_val, torch.from_numpy(y_val_enc.astype(np.int64)))
         test_ds = TensorDataset(X_test_t, torch.from_numpy(y_test_enc.astype(np.int64)))
@@ -606,7 +479,6 @@ def run_cnn_loro_cv(
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
         test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
-        # Model
         model = TerrainCNN1D(
             in_channels=len(SIGNAL_COLS),
             num_classes=n_classes,
@@ -626,7 +498,6 @@ def run_cnn_loro_cv(
             scheduler, device, max_epochs, patience,
         )
 
-        # Inference
         _, y_pred_enc = _evaluate(model, test_loader, nn.CrossEntropyLoss(), device)
         y_pred = le.inverse_transform(y_pred_enc)
         pred_labels.loc[test_mask] = y_pred
@@ -638,33 +509,16 @@ def run_cnn_loro_cv(
     return result
 
 
-# ===========================================================================
-# TRANSITION DETECTION FUNCTIONS
-# ===========================================================================
+# Transition detection functions
 
 def detect_gt_transitions(
     df: pd.DataFrame,
     time_col: str = "time",
     true_col: str = "true_label",
 ) -> list[dict]:
-    """
-    Detect ground-truth terrain transitions in a single-run, time-sorted DataFrame.
+    """Detect ground-truth terrain transitions in a single-run, time-sorted DataFrame.
 
-    A transition is any position i where df[true_col].iloc[i] != df[true_col].iloc[i-1]
-    (NaN labels are skipped). The DataFrame must be pre-sorted by time_col ascending.
-
-    Args:
-        df: Single-run DataFrame sorted by time_col.
-        time_col: Column with window start time (float, seconds).
-        true_col: Column with ground-truth label (str).
-
-    Returns:
-        List of dicts with keys:
-            transition_idx  — iloc of the first window of the new terrain epoch.
-            from_label      — label of the epoch that ended.
-            to_label        — label of the new epoch.
-            gt_time         — df[time_col].iloc[transition_idx].
-        Empty list if df has fewer than 2 rows or no label changes.
+    Returns a list of dicts with keys: transition_idx, from_label, to_label, gt_time.
     """
     if len(df) < 2:
         return []
@@ -696,22 +550,9 @@ def find_stable_detection(
     n_stable: int = 3,
     end_iloc: int | None = None,
 ) -> int | None:
-    """
-    Find the first iloc in series where n_stable consecutive values equal target_label.
+    """Find the first iloc where n_stable consecutive values equal target_label.
 
-    Implements the 'stable detection' criterion: a single stray prediction does
-    not count — the model must commit to the new class for n_stable windows in a
-    row before the transition is considered detected.
-
-    Args:
-        series: Array or Series of predicted label strings.
-        start_iloc: Positional index to begin searching from (inclusive).
-        target_label: Label that must appear n_stable times consecutively.
-        n_stable: Minimum run length required (>= 1).
-        end_iloc: Exclusive upper bound for search. Defaults to len(series).
-
-    Returns:
-        The iloc of the first window in the stable run, or None if not found.
+    Returns the iloc of the first window in the stable run, or None.
     """
     arr = np.asarray(series) if not isinstance(series, np.ndarray) else series
     n = len(arr)
@@ -745,40 +586,16 @@ def analyze_transitions(
     threshold_sec: float = 10.0,
     min_windows_remaining: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
-    """
-    Detect all ground-truth transitions in df and measure the detection delay
-    for each one.  Operates on a SINGLE run's time-sorted DataFrame.
+    """Detect all GT transitions in df and measure detection delay for each.
 
-    For each GT transition at position i:
+    Operates on a SINGLE run's time-sorted DataFrame. For each GT transition:
       1. GT transition time = df[time_col].iloc[i].
-      2. Stable detection is searched from position i, bounded by the next GT
-         transition index (exclusive). This prevents a correct detection in a
-         later epoch from being credited to an earlier transition.
-      3. detection_delay_sec = detection_time - gt_time  (always >= 0).
-      4. If fewer than n_stable windows remain at the run end  → 'boundary'.
-      5. If no stable detection within the search bound      → 'missed'.
+      2. Stable detection is searched from i, bounded by the next GT transition idx.
+      3. detection_delay_sec = detection_time - gt_time (always >= 0).
+      4. < n_stable windows remain at run end → 'boundary'.
+      5. No stable detection within the search bound → 'missed'.
 
-    Args:
-        df: Single-run DataFrame sorted ascending by time_col.
-            Must contain [time_col, true_col, pred_col].
-        time_col: Window start time column (float, seconds).
-        true_col: Ground-truth label column.
-        pred_col: Predicted label column.
-        n_stable: Consecutive windows required to declare a stable detection.
-        threshold_sec: Delays above this value are flagged with is_late=True.
-        min_windows_remaining: Transitions within this many windows of the run
-            end are flagged 'boundary'. Defaults to n_stable.
-
-    Returns:
-        (transitions_df, summary_stats):
-
-        transitions_df columns:
-            run_id, transition_idx, from_label, to_label, gt_time,
-            detection_time, detection_delay_sec, outcome, is_late, n_stable_used.
-
-        summary_stats keys:
-            n_transitions, n_detected, n_missed, n_boundary, detection_rate,
-            mean_delay_sec, median_delay_sec, std_delay_sec, max_delay_sec, n_late.
+    Returns (transitions_df, summary_stats).
     """
     if min_windows_remaining is None:
         min_windows_remaining = n_stable
@@ -795,7 +612,6 @@ def analyze_transitions(
         t_idx = trans["transition_idx"]
         next_t_idx = gt_transitions[k + 1]["transition_idx"] if k + 1 < len(gt_transitions) else n_windows
 
-        # Boundary check: not enough windows left to observe stable detection
         if t_idx + min_windows_remaining > n_windows:
             rows.append({
                 "run_id": run_id,
@@ -852,7 +668,6 @@ def analyze_transitions(
             "detection_time", "detection_delay_sec", "outcome", "is_late", "n_stable_used",
         ])
 
-    # Summary statistics
     n_total = len(rows)
     n_detected = int((transitions_df["outcome"] == "detected").sum()) if n_total else 0
     n_missed = int((transitions_df["outcome"] == "missed").sum()) if n_total else 0
@@ -876,21 +691,12 @@ def analyze_transitions(
     return transitions_df, summary
 
 
-# ===========================================================================
-# PROBABILITY VARIANTS
+# Probability variants
 #
-# These mirror the *_loro_cv functions above but return a (N_windows, C)
-# posterior matrix instead of (or alongside) the hard pred_label. They feed
-# the CUSUM detector in src/change_detection.py.
-#
-# Design notes:
-# - Class order is fixed once from the full label set in df (sorted), so all
-#   folds produce columns in the same order. Per-fold model.classes_ may be
-#   a subset, so I always map back to the global index.
-# - Output is a numpy array aligned to df.index (same row order), plus the
-#   canonical class list. This is what the CUSUM bank consumes.
-# - Hard labels are also returned for sanity-check / backwards compatibility.
-# ===========================================================================
+# Same as the *_loro_cv functions above but return a (N_windows, C) posterior
+# matrix. Class order is fixed once from the full label set so all folds produce
+# columns in the same order. Per-fold model.classes_ may be a subset, so we
+# always map back to the global index. Hard labels are also returned.
 
 def _global_classes(df: pd.DataFrame, label_col: str) -> list[str]:
     """Canonical sorted class list from the full label column."""
@@ -902,13 +708,10 @@ def _scatter_proba(
     fold_classes: np.ndarray,
     global_classes: list[str],
 ) -> np.ndarray:
-    """
-    Re-order a fold's proba matrix into the global class column order.
+    """Re-order a fold's proba matrix into the global class column order.
 
-    sklearn's predict_proba returns columns in the order of model.classes_,
-    which can be a subset (or a different order) of the global label set.
-    This puts each column in the correct global slot and zero-fills any
-    classes the model didn't see in its training fold.
+    sklearn's predict_proba returns columns in model.classes_ order, which can
+    be a subset/different order than the global label set. Zero-fills missing.
     """
     n_rows = fold_proba.shape[0]
     out = np.zeros((n_rows, len(global_classes)), dtype=float)
@@ -928,18 +731,10 @@ def run_classical_loro_cv_proba(
     random_state: int = 42,
     best_params: dict | None = None,
 ) -> tuple[np.ndarray, list[str], pd.Series]:
-    """
-    LORO-CV variant that returns soft posteriors instead of hard labels.
+    """LORO-CV variant returning soft posteriors instead of hard labels.
 
-    Mirrors run_classical_loro_cv() exactly for fitting; only the inference
-    step changes (predict_proba instead of predict). SVM is forced to
-    probability=True so it actually exposes posteriors — base/tuned configs
-    don't enable it because the standard eval doesn't need it.
-
-    Returns:
-        proba       : (N_windows, C) np.ndarray, row-aligned to df.index.
-        classes     : list[str] of length C, the global class order.
-        pred_label  : pd.Series of argmax labels (for sanity vs the hard run).
+    SVM is forced to probability=True so it exposes posteriors.
+    Returns (proba, classes, pred_label) where proba is (N, C) row-aligned to df.index.
     """
     classes = _global_classes(df, label_col)
     n_classes = len(classes)
@@ -963,8 +758,7 @@ def run_classical_loro_cv_proba(
             models = make_base_models(random_state)
         pipeline = models[model_name]
 
-        # SVM needs probability=True to expose predict_proba — flip it on here
-        # without touching the global model factory.
+        # SVM needs probability=True to expose predict_proba
         if model_name == "SVM":
             try:
                 pipeline.set_params(clf__probability=True)
@@ -993,7 +787,6 @@ def run_classical_loro_cv_proba(
             fold_classes = pipeline.named_steps["clf"].classes_
 
         scattered = _scatter_proba(fold_proba, fold_classes, classes)
-        # df.index isn't always positional, so write via a positional view
         test_pos = np.where(test_mask.to_numpy())[0]
         proba_full[test_pos] = scattered
         pred_labels.iloc[test_pos] = np.array(classes)[np.argmax(scattered, axis=1)]
@@ -1016,13 +809,7 @@ def run_mlp_loro_cv_proba(
     val_split: float = 0.15,
     random_state: int = 42,
 ) -> tuple[np.ndarray, list[str], pd.Series]:
-    """
-    MLP LORO-CV that returns softmax posteriors.
-
-    Same training loop as run_mlp_loro_cv() — I just plug in a softmax pass
-    over the test loader instead of the argmax. Per-fold LabelEncoder is
-    re-mapped to the global class order before writing into proba_full.
-    """
+    """MLP LORO-CV returning softmax posteriors. Per-fold LabelEncoder is mapped to global class order."""
     if not _TORCH_AVAILABLE:
         raise ImportError("PyTorch required for run_mlp_loro_cv_proba.")
 
@@ -1058,8 +845,7 @@ def run_mlp_loro_cv_proba(
         le = LabelEncoder()
         y_tr_enc = le.fit_transform(y_tr_str)
         y_val_enc = le.transform(y_val_str)
-        # If a class is absent from this fold's training set we'd get a
-        # KeyError below. Doesn't happen on the Farm split but guard anyway.
+        # Guard against a class missing from this fold's training set
         y_test_enc = np.array(
             [le.transform([y])[0] if y in le.classes_ else -1 for y in y_test_str]
         )
@@ -1093,8 +879,7 @@ def run_mlp_loro_cv_proba(
             scheduler, device, max_epochs, patience,
         )
 
-        # Forward pass over test set to get logits, then softmax. I avoid
-        # _evaluate() since it returns argmax — I want the full posterior.
+        # Forward pass over test set to get logits, then softmax (not argmax)
         model.eval()
         X_test_t = torch.tensor(X_test_scaled, dtype=torch.float32).to(device)
         with torch.no_grad():
@@ -1128,13 +913,7 @@ def run_cnn_loro_cv_proba(
     val_split: float = 0.15,
     random_state: int = 42,
 ) -> tuple[np.ndarray, list[str], pd.Series]:
-    """
-    CNN LORO-CV that returns softmax posteriors.
-
-    Same training loop as run_cnn_loro_cv() with a softmax pass over the
-    test windows at the end. cnn_df is realigned to feature_df by window_id
-    (same trick as the hard variant).
-    """
+    """CNN LORO-CV returning softmax posteriors. cnn_df realigned to feature_df by window_id."""
     if not _TORCH_AVAILABLE:
         raise ImportError("PyTorch required for run_cnn_loro_cv_proba.")
 
@@ -1151,7 +930,6 @@ def run_cnn_loro_cv_proba(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     run_ids = sorted(feature_df[run_col].unique().tolist())
 
-    # Align cnn_df rows to feature_df by window_id (same as hard variant)
     if "window_id" in feature_df.columns and "window_id" in cnn_df.columns:
         cnn_df = (cnn_df.set_index("window_id")
                   .loc[feature_df["window_id"].values]
@@ -1218,7 +996,7 @@ def run_cnn_loro_cv_proba(
             scheduler, device, max_epochs, patience,
         )
 
-        # Run inference in batches — full test set at once may not fit GPU
+        # Batched inference — full test set may not fit GPU
         model.eval()
         fold_proba_chunks: list[np.ndarray] = []
         with torch.no_grad():
@@ -1248,22 +1026,9 @@ def compare_models(
     n_stable: int = 3,
     threshold_sec: float = 10.0,
 ) -> pd.DataFrame:
-    """
-    Run analyze_transitions for multiple models and aggregate results.
+    """Run analyze_transitions for multiple models and aggregate results.
 
-    Args:
-        df: Feature DataFrame with metadata (run_col, time_col, true_col).
-        predictions_dict: Dict mapping model name → pd.Series of predicted
-                          label strings, index-aligned to df.
-        time_col: Window start time column.
-        true_col: Ground-truth label column.
-        run_col: Run identifier column.
-        n_stable: Passed to analyze_transitions.
-        threshold_sec: Passed to analyze_transitions.
-
-    Returns:
-        Combined transitions DataFrame with all analyze_transitions columns
-        plus a 'model' column.
+    Returns combined transitions DataFrame with a 'model' column.
     """
     run_ids = sorted(df[run_col].unique().tolist())
     all_rows: list[pd.DataFrame] = []
@@ -1304,9 +1069,7 @@ def compare_models(
     ])
 
 
-# ===========================================================================
-# VISUALIZATION
-# ===========================================================================
+# Visualization
 
 def plot_transition_timeline(
     df: pd.DataFrame,
@@ -1320,42 +1083,21 @@ def plot_transition_timeline(
     title: str | None = None,
     LABEL_ORDER: list[str] = None,
 ) -> plt.Figure:
-    """
-    Plot ground-truth vs predicted terrain label over time for a single run.
+    """Plot GT vs predicted terrain label over time for a single run.
 
-    Layout:
-      - Top band: ground-truth label (color-coded).
-      - Bottom band: predicted label (color-coded).
-      - Dashed verticals: GT transition times.
-      - Solid verticals: detection times (green=on time, orange=late, red=missed).
-      - Delay annotations above each detection line.
-
-    Args:
-        df: Single-run, time-sorted DataFrame with [time_col, true_col, pred_col].
-        transitions_df: Output of analyze_transitions for this run.
-        time_col: Time column name.
-        true_col: Ground-truth label column.
-        pred_col: Predicted label column.
-        run_id: Used in the plot title; inferred from df['run_id'] if None.
-        ax: Existing Axes to draw on. If None, a new Figure is created.
-        label_colors: Dict mapping label → color.
-        title: Optional title override.
-
-    Returns:
-        matplotlib Figure.
+    Top band: GT label; bottom band: predicted. Dashed verticals mark GT
+    transition times; solid verticals mark detections (green=on time, orange=late, red=missed).
     """
     plt.style.use("seaborn-v0_8-darkgrid")
     colors = label_colors if label_colors is not None else {}
     all_labels = sorted(set(df[true_col].dropna().unique()) | set(df[pred_col].dropna().unique()))
 
-    # Assign color from LABEL_ORDER if available, otherwise use palette
     if LABEL_ORDER:
         palette = sns.color_palette("husl", len(LABEL_ORDER))
         for i, lbl in enumerate(LABEL_ORDER):
             if lbl not in colors:
                 colors[lbl] = palette[i]
-    
-    # Assign color to any remaining labels not in LABEL_ORDER
+
     palette = sns.color_palette("husl", len(all_labels))
     for i, lbl in enumerate(all_labels):
         if lbl not in colors:
@@ -1369,29 +1111,18 @@ def plot_transition_timeline(
     times = df[time_col].to_numpy()
     t_min, t_max = times[0], times[-1]
 
-    # Draw color bands for GT (top half) and pred (bottom half)
+    # GT (top) and pred (bottom) bands
     band_height = 0.45
     for col, y_center, label_name in [
         (true_col, 0.75, "GT"),
         (pred_col, 0.25, "Pred"),
     ]:
         labels_arr = df[col].to_numpy()
-        # Draw a rectangle per window
         for i, lbl in enumerate(labels_arr):
             if pd.isna(lbl):
                 continue
             t0 = times[i]
             t1 = times[i + 1] if i + 1 < len(times) else t0 + 1.0
-            rect = mpatches.FancyArrow(
-                x=t0, y=y_center - band_height / 2,
-                dx=t1 - t0, dy=0,
-                width=band_height,
-                head_width=0, head_length=0,
-                color=colors.get(str(lbl), "#aaaaaa"),
-                alpha=0.85,
-                linewidth=0,
-            )
-            # Use a simpler fill_between approach instead
             ax.fill_betweenx(
                 [y_center - band_height / 2, y_center + band_height / 2],
                 t0, t1,
@@ -1400,12 +1131,10 @@ def plot_transition_timeline(
                 linewidth=0,
             )
 
-    # GT transition lines (dashed)
     for _, row in transitions_df.iterrows():
         ax.axvline(row["gt_time"], color="black", linestyle="--", linewidth=1.5,
                    alpha=0.8, zorder=5)
 
-    # Detection lines (solid)
     for _, row in transitions_df.iterrows():
         if row["outcome"] == "detected":
             c = "orange" if row["is_late"] else "#2ca02c"
@@ -1426,7 +1155,6 @@ def plot_transition_timeline(
             ax.axvline(row["gt_time"], color="red", linestyle=":", linewidth=2.0,
                        alpha=0.7, zorder=6)
 
-    # Y-axis labels
     ax.set_yticks([0.25, 0.75])
     ax.set_yticklabels(["Predicted", "Ground Truth"], fontsize=9)
     ax.set_ylim(0, 1)
@@ -1436,7 +1164,6 @@ def plot_transition_timeline(
     run_label = run_id or (df["run_id"].iloc[0] if "run_id" in df.columns else "")
     ax.set_title(title or f"Terrain Labels Over Time — {run_label}", fontsize=10)
 
-    # Legend: terrain colors
     legend_patches = [
         mpatches.Patch(color=colors.get(lbl, "#aaaaaa"), label=lbl)
         for lbl in LABEL_ORDER if lbl in all_labels
@@ -1461,22 +1188,9 @@ def plot_detection_delay_histogram(
     bins: int = 15,
     figsize: tuple = (14, 5),
 ) -> plt.Figure:
-    """
-    Plot detection delay distributions as overlapping histograms, one series per model.
+    """Plot detection delay histograms + detection-rate/mean-delay bars per model.
 
-    Shows only 'detected' transitions. Missed and boundary counts are annotated
-    as text. Models are colour-coded by the husl palette.
-
-    Args:
-        transitions_df: Combined DataFrame from compare_models.
-        model_col: Column identifying the model.
-        delay_col: Detection delay column (seconds).
-        outcome_col: Outcome column.
-        bins: Number of histogram bins.
-        figsize: Figure size.
-
-    Returns:
-        matplotlib Figure.
+    Only 'detected' transitions feed the histogram; missed/boundary counts are annotated.
     """
     plt.style.use("seaborn-v0_8-darkgrid")
     models = transitions_df[model_col].unique().tolist()
@@ -1485,7 +1199,6 @@ def plot_detection_delay_histogram(
 
     fig, axes = plt.subplots(1, 2, figsize=figsize, dpi=150)
 
-    # Left panel: overlapping histograms
     ax_hist = axes[0]
     max_delay = transitions_df.loc[transitions_df[outcome_col] == "detected", delay_col].max()
     bin_edges = np.linspace(0, max_delay * 1.05 if not np.isnan(max_delay) else 30, bins + 1)
@@ -1503,7 +1216,6 @@ def plot_detection_delay_histogram(
     ax_hist.set_title("Detection Delay Distribution", fontsize=11)
     ax_hist.legend(fontsize=9)
 
-    # Right panel: mean delay + detection rate bar chart
     ax_bar = axes[1]
     x = np.arange(len(models))
     width = 0.35
@@ -1530,12 +1242,10 @@ def plot_detection_delay_histogram(
     ax2.set_ylabel("Mean Detection Delay (s)", fontsize=10)
     ax_bar.set_title("Detection Rate & Mean Delay by Model", fontsize=11)
 
-    # Combined legend
     handles = [bars1[0], bars2[0]]
     labels_leg = ["Detection Rate", "Mean Delay (s)"]
     ax_bar.legend(handles, labels_leg, fontsize=9, loc="upper right")
 
-    # Annotate missed/boundary counts
     y_pos = 1.05
     for i, model_name in enumerate(models):
         sub = transitions_df[transitions_df[model_col] == model_name]
