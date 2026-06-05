@@ -41,18 +41,18 @@ Dummy (stratified) & ---                         & 0.201 & $\pm 0.031$ & 0.174 \
 \vspace{-6mm}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{Pictures/Figures/master_comparison_C5.png}
+    \includegraphics[width=0.75\textwidth]{Pictures/Figures/master_comparison_C5.png}
     \caption{Master model comparison on the five-class campus Dataset~A.}
     \label{fig:campus_master_bars}
 \end{figure}
 
 \vspace{-8mm}
-\paragraph{Per-class failures driven by class imbalance and route effects.} The $F_1 \approx 0.77$ headline is heavily diluted by two minority classes (as seen in \Cref{tab:window_counts}) whose per-class scores collapse on the worst folds. \Cref{tab:campus_perclass} reports per-class MLP numbers, representative of the other classical models: \texttt{cobblestone} reaches only $F_1 = 0.31$ (folds at $0.08$ and $0.55$), and \texttt{muddy\_dirt\_track} reaches $F_1 = 0.43$ with a high recall variance and worst-fold value of $0.17$. The fold-quality diagnostic (\Cref{tab:fold_quality_campus} ) explains the collapse: both classes are recorded almost exclusively on a single session each (cobblestone on Run~B of the 9~March log and on the 26~March log; muddy dirt track on the two snowy February sessions), so when the dominant run becomes the test fold the model has essentially no training data for that class. Speed conditioning compounds the problem: each minority class shows a train-test speed total-variation distance of $0.56$--$0.86$, visible in the per-class speed-bin distributions of \Cref{fig:speed_bins}: \texttt{muddy\_dirt\_track} and \texttt{smooth\_terrain} are recorded almost exclusively at high speed, while the other cluster at the operating speed. The behaviour is a dataset-collection limitation, not a model failure, and motivates dropping the two classes in the next configuration.
+\paragraph{Per-class failures driven by class imbalance and route effects.} The $F_1 \approx 0.77$ headline is heavily diluted by two minority classes (as seen in \Cref{tab:window_counts}) whose per-class scores collapse on the worst folds. \Cref{tab:campus_perclass} reports per-class MLP numbers, representative of the other classical models: \texttt{cobblestone} reaches only $F_1 = 0.31$ (folds at $0.08$ and $0.55$), and \texttt{muddy\_dirt\_track} reaches $F_1 = 0.43$ with a high recall variance and worst-fold value of $0.17$. The fold-quality diagnostic (\Cref{tab:fold_quality_campus} ) explains the collapse: both classes are recorded almost exclusively on a single session each (cobblestone on Run~B of the 9~March log and on the 26~March log; muddy dirt track on the two snowy February sessions), so when the dominant run becomes the test fold the model has essentially no training data for that class. Speed conditioning compounds the problem: each minority class shows a train--test speed total-variation distance of $0.56$--$0.86$, i.e.\ it appears at systematically different speeds in the train and test folds. \Cref{fig:speed_bins} shows the aggregate picture: \texttt{smooth\_terrain} and \texttt{muddy\_dirt\_track} carry by far the largest high-speed share ($\sim 57\,\%$ and $50\,\%$ of their windows), while the other classes sit predominantly at the operating speed. The behaviour is a dataset-collection limitation, not a model failure, and motivates dropping the two classes in the next configuration.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\textwidth]{Pictures/Figures/speed_bins_campus.png}
-    \caption{Per-class speed distribution on the campus dataset. \texttt{muddy\_dirt\_track} and \texttt{smooth\_terrain} are concentrated in the high-speed band ($> 0.53\,\text{m/s}$), reached only during higher-speed traversal between terrain segments.}
+    \caption{Per-class speed distribution on the campus dataset. \texttt{smooth\_terrain} and \texttt{muddy\_dirt\_track} carry the largest high-speed share ($\sim 57\,\%$ and $50\,\%$ of their windows, in the $>0.53\,\text{m/s}$ band); the other classes sit predominantly at the operating speed.}
     \label{fig:speed_bins}
 \end{figure}
 
@@ -263,7 +263,6 @@ On the farm the SVM and LR are nominally best; on the campus 5-class problem, th
         \caption{Campus Dataset~A (5-class).}
         \label{fig:significance_campus}
     \end{subfigure}
-    \hfill
     \begin{subfigure}[t]{0.8\textwidth}
         \centering
         \includegraphics[width=\textwidth]{Pictures/Figures/significance_farm.png}
@@ -347,7 +346,7 @@ Stratified dummy    & 0.201 & 0.347 & 0.320 \\
 
 \paragraph{Evaluation protocol.} The detector emits $\bigl\{\bigl(k_a^{(j)},\,\hat{c}^{(j)}\bigr)\bigr\}$ from the per-window posterior stream of the best LORO-fold model. Each ground-truth transition $(t_k,\ell_k)$ is paired with the first alarm satisfying $t_k - \delta \le t_{k_a} < t_{k+1}$, with a grace $\delta = 1\,\text{s}$ to allow detections triggered on the last window before the change. The pairing yields one of four outcomes per transition: \textbf{detected} (an alarm exists in the window and $\hat{c} = \ell_k$), \textbf{wrong-class} (an alarm exists but $\hat{c}\neq\ell_k$), \textbf{missed} (no alarm exists in the window), or \textbf{boundary} (insufficient windows remain after $t_k$ to observe a stable detection). Detection delay is $t_{k_a} - t_k$. Alarms outside any expected window are accumulated into a \emph{false-alarm rate} (alarms per minute of stationary signal), which the $n_{\text{stable}}$ evaluation cannot measure intrinsically.
 
-\paragraph{$n_{\text{stable}}$ baseline.} \Cref{tab:transition_nstable} summarises the implicit detector at $n_{\text{stable}} = 5$. On the farm, the CNN and MLP detect every transition ($16/16$) at mean delays of $1.85\,\text{s}$ and $3.58\,\text{s}$; XGBoost and LR detect $94\,\%$ at $4$--$5\,\text{s}$; SVM is the slowest at $13.2\,\text{s}$. On the campus dataset A 5 classes, MLP and RF detect the fastest ($\sim 1\,\text{s}$ at $83\,\%$ detection), but XGBoost, LR, SVM and CNN reach $100\,\%$ detection only after a $\sim 50\,\text{s}$ mean delay, driven by a single uncertain transition on the snowy 23~Feb log where the stable-run rule waits indefinitely for five consistent windows. \Cref{fig:transition_nstable} sweeps $n_{\text{stable}}$ on the farm: mean delay grows linearly while the spurious-flip rate decays inversely. The implicit rule therefore trades delay against false alarms but cannot calibrate to a fixed budget, exactly the limitation the explicit CUSUM detector is intended to address.
+\paragraph{$n_{\text{stable}}$ baseline.} \Cref{tab:transition_nstable} summarises the implicit detector at $n_{\text{stable}} = 5$. On the farm, the CNN and MLP detect every transition ($16/16$) at mean delays of $1.85\,\text{s}$ and $3.58\,\text{s}$; XGBoost and LR detect $94\,\%$ at $4$--$5\,\text{s}$; SVM is the slowest at $13.2\,\text{s}$. On the campus dataset A 5 classes, MLP and RF detect the fastest ($\sim 1\,\text{s}$ at $83\,\%$ detection), but XGBoost, LR, SVM and CNN reach $100\,\%$ detection only after a $\sim 50\,\text{s}$ mean delay, driven by a single uncertain transition on the snowy 23~Feb log where the stable-run rule waits indefinitely for five consistent windows (\Cref{fig:transition_timelines_c}). \Cref{fig:transition_nstable} sweeps $n_{\text{stable}}$ on the farm: mean delay grows linearly while the spurious-flip rate decays inversely. The implicit rule therefore trades delay against false alarms but cannot calibrate to a fixed budget, exactly the limitation the explicit CUSUM detector is intended to address.
 
 \vspace{-4mm}
 \begin{table}[H]
