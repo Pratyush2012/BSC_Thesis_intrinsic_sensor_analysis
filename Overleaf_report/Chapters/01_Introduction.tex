@@ -82,7 +82,7 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
 \begin{figure}[htbp]
     \centering
     \makebox[\textwidth][c]{%
-    \resizebox{1.2\textwidth}{!}{%
+    \resizebox{1\textwidth}{!}{%
     \begin{ganttchart}[
         canvas/.style={draw=black!25, line width=.6pt},
         hgrid style/.style={draw=black!25, line width=.6pt},
@@ -167,11 +167,11 @@ The project was scoped as an 18-week effort (2 February – 8 June 2026), organi
     \caption{Originally planned project timeline (2 February – 8 June 2026).}
     \label{fig:gantt}
 \end{figure}
-
+\vspace{-4mm}
 \begin{figure}[H]
     \centering
     \makebox[\textwidth][c]{%
-    \resizebox{1.2\textwidth}{!}{%
+    \resizebox{1\textwidth}{!}{%
     \begin{ganttchart}[
         canvas/.style={draw=black!25, line width=.6pt},
         hgrid style/.style={draw=black!25, line width=.6pt},
@@ -251,18 +251,14 @@ The overall six-phase structure held, but several elements shifted
     \item \textbf{Scope pivot during planning.} The original target was terrain-induced collision detection; this was dropped because collecting sufficient collision data was  infeasible without risking damage to Ricbot, and the scope was refocused on terrain-segment classification.
     \item \textbf{Data collection ran longer than planned} (campus: 23 Feb – 26 Mar instead of 15 Feb – 7 Mar; farm: 21 \& 28 Apr instead of 5–11 Apr), driven by robot availability, maintenance and weather. The campus dataset freeze slipped from 21 March to 27 March.
     \item \textbf{Speed-regime A/B split added (30 March).} Early campus results showed that speed variability and class imbalance were major confounds, so an explicit comparison between the full speed range (Dataset~A) and a low, near-constant regime (Dataset~B) was added. The low-speed strategy was subsequently adopted on the farm, a more realistic deployment scenario.
-    \item \textbf{Domain transfer evaluation dropped.} The campus and farm label spaces only partially overlap, so the two datasets are reported as independent classification problems rather than via direct train-on-campus / test-on-farm transfer.
-    \item \textbf{Additional analyses added (18 April – 9 May):} sensor-zeroing and baseline transition detection as new evaluation axes; a three-class matched campus subset for a like-for-like comparison with the farm; and a CUSUM change detector on classifier posteriors as a principled alternative transition detector, following \cite[\S6.4]{Blanke2003}.
+    \item \textbf{Campus dataset role shifted; domain transfer evaluation dropped.} The campus campaign was originally intended both to develop the pipeline and to feed a direct train-on-campus / test-on-farm transfer evaluation. The farm classes turned out to have no clean one-to-one campus analogues, so the campus surfaces were instead selected as a deliberately wider roughness range: classes plausibly found on a farm (grass, dirt track) together with deliberately extreme contrasts (smooth asphalt, cobblestone) chosen to probe how the pipeline behaves at the easy and hard ends of the recognition problem. The two campaigns are therefore reported as independent classification problems with their own label spaces.
+     \item \textbf{Additional analyses added (18 April – 9 May):} sensor-zeroing and the implicit $n_{\text{stable}}$ transition detector as new evaluation axes; a three-class matched campus subset for a like-for-like comparison with the farm; and, late in Phase~3, an explicit CUSUM change detector on the classifier posteriors, added on the supervisor's recommendation as a principled alternative with a calibratable false-alarm rate, following \cite[\S6.4]{Blanke2003}.
     \item \textbf{Phase~4 absorbed into Phase~3; writing started two weeks earlier.} The ablation work replaced the originally separate Phase~4. The final model comparison was locked on 11 May (vs.\ planned 18 April) due to the farm data collection delay and some pipeline changes, and writing began on 4 May (vs.\ planned 17 May).
 \end{itemize}
 
 
 \section{Thesis Outline}
 
-\Cref{ch:background} reviews the relevant background on proprioceptive terrain classification, IMU signals, and the feature families and supervised learning methods used in this work. \Cref{ch:setup} and \Cref{ch:collection} then describe the Ricbot platform, its sensor suite, the two outdoor data-collection campaigns (campus development and main agricultural), and the manual video-aided labelling procedure.
+\Cref{ch:background} reviews proprioceptive terrain classification, IMU signal physics, time- and frequency-domain features, supervised learning, the velocity--vibration confound and change-point detection. \Cref{ch:setup,ch:collection} describe the Ricbot platform and sensor suite, the two outdoor campaigns (campus development and primary farm) and the video-aided labelling procedure. The methodology spans \Cref{ch:processing} (QC, synchronisation, cleaning, filtering and sliding-window segmentation), \Cref{ch:feature} (189 time- and frequency-domain features, the speed-regime A/B split and MI ranking with correlation pruning) and \Cref{ch:classification} (six classifier families under Leave-One-Run-Out cross-validation). \Cref{ch:results} reports classification, sensor-ablation and transition-detection results on the farm and three nested campus configurations; \Cref{ch:discussion,ch:conclusion} interpret them and outline future work.
 
-The methodology is presented in three chapters: \Cref{ch:processing} covers the preprocessing pipeline (QC, synchronisation, cleaning, filtering, sliding-window segmentation); \Cref{ch:feature} the 189 time and frequency-domain features, the speed-regime A/B dataset split, and the mutual-information ranking with correlation pruning; and \Cref{ch:classification} the six classifier families and the Leave-One-Run-Out cross-validation protocol.
-
-\Cref{ch:results} reports the full numerical findings: classification performance on both datasets, sensor-ablation, and transition detection, and \Cref{ch:discussion,ch:conclusion} interpret them and outline future work.
-
-In brief, the thesis shows that intrinsic motion signals alone are sufficient to recognise terrain on both scenarios, that careful feature engineering keeps classical learners competitive with a 1D-CNN, and that the accelerometer and gyroscope carry the bulk of the discriminative information.
+In brief, intrinsic motion signals alone suffice to recognise terrain in both settings, careful feature engineering keeps classical learners competitive with a 1D-CNN, and the accelerometer and gyroscope carry the bulk of the discriminative information.
