@@ -134,6 +134,7 @@ Each pair is a `[t_start, t_end]` range in seconds relative to the run start.
 - Gyroscope: `gx` → pitch, `gy` → yaw, `gz` → roll
 - `gy` (yaw rate) is excluded from features — it encodes turning, not terrain.
 
+The raw sensor logs have been published on Zenodo (DOI: https://doi.org/10.5281/zenodo.20552792). To reproduce the pipeline end-to-end, download the dataset and save each run under data/raw/<dataset>/<run_name>/ (see Data Format).
 ---
 
 ## Pipeline Stages
@@ -247,7 +248,7 @@ python -m ipykernel install --user --name terrain-cls --display-name "Terrain CL
 
 ## Usage
 
-The raw sensor logs are not included in this repository. To reproduce the pipeline end-to-end you need to provide your own runs under `data/raw/<dataset>/<run_name>/` following the [Data Format](#data-format) above, then:
+Download the raw sensor logs from Zenodo (DOI: https://doi.org/10.5281/zenodo.20552792) and place each run under data/raw/<dataset>/<run_name>/.
 
 1. Place raw run directories under `data/raw/` (e.g. `data/raw/Farm/Run1/log_*/`).
 2. Create a `labels_config.json` for each run.
