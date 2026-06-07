@@ -134,7 +134,7 @@ Each pair is a `[t_start, t_end]` range in seconds relative to the run start.
 - Gyroscope: `gx` → pitch, `gy` → yaw, `gz` → roll
 - `gy` (yaw rate) is excluded from features — it encodes turning, not terrain.
 
-The raw sensor logs have been published on Zenodo (DOI: https://doi.org/10.5281/zenodo.20552792). To reproduce the pipeline end-to-end, download the dataset and save each run under data/raw/<dataset>/<run_name>/ (see Data Format).
+The raw sensor logs have been published on Zenodo (DOI: https://doi.org/10.5281/zenodo.20552792). To reproduce the pipeline end-to-end, download the dataset and save each run under a new repository data/.
 
 ---
 
